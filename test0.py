@@ -18,18 +18,16 @@ class DataWizardApp:
         self.file_path = ctk.StringVar()
         self.df = None
         self.entries = {}
-        self.theme_mode = ctk.BooleanVar(value=True)  # True for dark, False for light
-
+        
         self.build_main_layout()
 
-    def toggle_theme_switch(self):
-        new_mode = "dark" if self.theme_mode.get() else "light"
-        ctk.set_appearance_mode(new_mode)
-        self.build_main_layout()
-
+    
     def build_main_layout(self):
+        
         for widget in self.root.winfo_children():
             widget.destroy()
+
+        self.prompt.set("")
 
         # Add scrollable frame setup
         canvas_frame = ctk.CTkFrame(self.root)
@@ -57,6 +55,7 @@ class DataWizardApp:
         #ctk.CTkLabel(sidebar, text="\nFor voice\nassistance\nPress Windows + B", wraplength=180, justify="center").pack(pady=15)
         #ctk.CTkLabel(sidebar, text="\nFor Typing\nClick on the box and\ntype your question", wraplength=180, justify="center").pack(pady=5)
 
+                # Organization logo in bottom-left
         try:
             org_image = Image.open("org_logo.png").resize((200, 80))
             org_logo = ctk.CTkImage(light_image=org_image, dark_image=org_image, size=(200, 80))
@@ -65,8 +64,8 @@ class DataWizardApp:
             org_label.pack(side="bottom", pady=10)
         except:
             pass
+
         
-        # Main area
         main_area = ctk.CTkFrame(self.scrollable_area)
         main_area.pack(side="left", fill="both", expand=True, padx=20, pady=20)
 
@@ -75,36 +74,48 @@ class DataWizardApp:
         # Data source dropdown in center
         source_frame = ctk.CTkFrame(main_area)
         source_frame.pack(pady=10)
-        ctk.CTkLabel(source_frame, text="Choose Data Source from the drop-down:").pack(pady=5)
+        ctk.CTkLabel(source_frame, text="Choose Data Source from the drop-down::").pack(pady=5)
         self.source_menu = ctk.CTkOptionMenu(source_frame, variable=self.data_source,
                                              values=["Excel/CSV", "SQL Database", "SharePoint List"])
         self.source_menu.pack(pady=5)
-        ctk.CTkButton(source_frame, text="Load", command=self.load_source_screen).pack(pady=10)
+        # Button row for Load and Back side-by-side
+        button_row = ctk.CTkFrame(source_frame)
+        button_row.pack(pady=10)
+        ctk.CTkButton(button_row, text="Upload", command=self.load_source_screen).pack(side="left", padx=5)
+        ctk.CTkButton(button_row, text="Back", command=self.build_main_layout).pack(side="left", padx=5)
 
         # Input section for file path or DB/sharepoint credentials
         self.input_section = ctk.CTkFrame(main_area)
         self.input_section.pack(pady=10)
+        self.input_section.pack(pady=10)
+
+        # Summarize button (appears after data is loaded)
+        self.summarize_button = ctk.CTkButton(main_area, text="Summarize Dataset", command=self.summarize_data)
+        self.summarize_button.pack(pady=10)
+
+        self.summary_label = ctk.CTkLabel(main_area, text="", wraplength=600, justify="left")
+        self.summary_label.pack(pady=10)
 
         # Prompt and result
-        ctk.CTkEntry(main_area, textvariable=self.prompt, placeholder_text="Ask your question...", width=500).pack(pady=10)
+        self.prompt_entry = ctk.CTkEntry(main_area, textvariable=self.prompt, placeholder_text="Ask your question...", width=500)
+        self.prompt_entry.pack(pady=10)
         ctk.CTkButton(main_area, text="Analyze", command=self.run_analysis).pack(pady=10)
 
-        self.result_label = ctk.CTkLabel(main_area, text="", font=("Arial", 32))
+        self.result_label = ctk.CTkLabel(main_area, text="", wraplength=600, justify="left")
+        self.result_label.pack(pady=20)
         self.result_label.pack(pady=20)
 
-        # Optional avatar image in bottom right
-        try:
+        # Optional avatar image in bottom left
+        ''' try:
             image = Image.open("logo.png").resize((100, 100))
             avatar = ctk.CTkImage(light_image=image, dark_image=image, size=(100, 100))
-            avatar_label = ctk.CTkLabel(self.root, image=avatar, text="")
+            avatar_label = ctk.CTkLabel(sidebar, image=avatar, text="")
             avatar_label.image = avatar
-            avatar_label.place(relx=0.95, rely=0.75, anchor="se")
+            avatar_label.pack(side="bottom", pady=10)
         except:
             pass
-
-        # Theme switch in bottom-right corner
-        theme_switch = ctk.CTkSwitch(self.root, text="Dark Mode", variable=self.theme_mode, command=self.toggle_theme_switch)
-        theme_switch.place(relx=0.95, rely=0.95, anchor="se")
+        '''
+        
 
     def load_source_screen(self):
         for widget in self.input_section.winfo_children():
@@ -143,6 +154,12 @@ class DataWizardApp:
                 messagebox.showinfo("Success", "File loaded successfully!")
             except Exception as e:
                 messagebox.showerror("Error", str(e))
+
+    def summarize_data(self):
+        if self.df is not None:
+            self.summary_label.configure(text="This is a hardcoded summary: The dataset contains X rows and Y columns. Major trends include...")
+        else:
+            messagebox.showerror("Summary Error", "No data loaded to summarize.")
 
     def run_analysis(self):
         try:
