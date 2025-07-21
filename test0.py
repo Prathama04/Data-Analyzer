@@ -5,7 +5,7 @@ from PIL import Image
 class DataWizardApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Data Analyzer - Split Panel Layout")
+        self.root.title("Data Analyzer - Dashboard Layout")
         self.root.geometry("900x600")
         self.root.minsize(600, 400)
         ctk.set_appearance_mode("light")
@@ -19,46 +19,49 @@ class DataWizardApp:
     def build_main_layout(self):
         for widget in self.root.winfo_children():
             widget.destroy()
+        self.root.grid_columnconfigure((0, 1), weight=1)
+        self.root.grid_rowconfigure((0, 1), weight=1)
 
-        # Sidebar
-        sidebar = ctk.CTkFrame(self.root, width=200, corner_radius=0)
-        sidebar.pack(side="left", fill="y")
-        ctk.CTkLabel(sidebar, text="Data Analyzer", font=("Arial", 16, "bold"), wraplength=180).pack(pady=(20, 10))
-        ctk.CTkLabel(sidebar, text="Your Data Assistant", wraplength=180, justify="center").pack(pady=5)
+        # Top-Left: Data Source
+        source_frame = ctk.CTkFrame(self.root)
+        source_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(source_frame, text="Data Source", font=("Arial", 14)).pack(pady=5)
+        self.source_menu = ctk.CTkOptionMenu(source_frame, variable=self.data_source, values=["Excel/CSV", "SQL Database", "SharePoint List"])
+        self.source_menu.pack(pady=5)
+        self.input_section = ctk.CTkFrame(source_frame)
+        self.input_section.pack(pady=10, fill="x")
+        ctk.CTkButton(source_frame, text="Load", command=self.load_source_screen).pack(pady=10)
+
+        # Top-Right: Data Preview
+        data_frame = ctk.CTkFrame(self.root)
+        data_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(data_frame, text="Data Preview", font=("Arial", 14)).pack(pady=5)
+        self.summary_label = ctk.CTkLabel(data_frame, text="No data loaded.", wraplength=300, justify="left")
+        self.summary_label.pack(pady=10)
+        ctk.CTkButton(data_frame, text="Summarize Dataset", command=self.summarize_data).pack(pady=10)
+
+        # Bottom: Analysis
+        analysis_frame = ctk.CTkFrame(self.root)
+        analysis_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(analysis_frame, text="Analysis", font=("Arial", 14)).pack(pady=5)
+        self.prompt_entry = ctk.CTkEntry(analysis_frame, placeholder_text="Ask your question...", width=600)
+        self.prompt_entry.pack(pady=10)
+        ctk.CTkButton(analysis_frame, text="Analyze", command=self.run_analysis).pack(pady=10)
+        self.result_label = ctk.CTkLabel(analysis_frame, text="", wraplength=600, justify="left")
+        self.result_label.pack(pady=10)
+
+        # Sidebar (optional, for branding)
+        sidebar = ctk.CTkFrame(self.root, width=150, corner_radius=0)
+        sidebar.grid(row=0, column=2, rowspan=2, sticky="ns")
+        ctk.CTkLabel(sidebar, text="Data Analyzer", font=("Arial", 16, "bold"), wraplength=140).pack(pady=(20, 10))
         try:
-            org_image = Image.open("org_logo.png").resize((200, 80))
-            org_logo = ctk.CTkImage(light_image=org_image, dark_image=org_image, size=(200, 80))
+            org_image = Image.open("org_logo.png").resize((140, 70))
+            org_logo = ctk.CTkImage(light_image=org_image, dark_image=org_image, size=(140, 70))
             org_label = ctk.CTkLabel(sidebar, image=org_logo, text="")
             org_label.image = org_logo
             org_label.pack(side="bottom", pady=10)
         except:
             pass
-
-        # Data Panel
-        data_panel = ctk.CTkFrame(self.root, width=300)
-        data_panel.pack(side="left", fill="both", expand=True, padx=10, pady=10)
-        ctk.CTkLabel(data_panel, text="Data Preview", font=("Arial", 14)).pack(pady=5)
-        self.summary_label = ctk.CTkLabel(data_panel, text="No data loaded.", wraplength=280, justify="left")
-        self.summary_label.pack(pady=10)
-        ctk.CTkButton(data_panel, text="Summarize Dataset", command=self.summarize_data).pack(pady=10)
-
-        # Analysis Panel
-        analysis_panel = ctk.CTkFrame(self.root)
-        analysis_panel.pack(side="right", fill="both", expand=True, padx=10, pady=10)
-        ctk.CTkLabel(analysis_panel, text="Analysis", font=("Arial", 14)).pack(pady=5)
-        self.prompt_entry = ctk.CTkEntry(analysis_panel, placeholder_text="Ask your question...", width=400)
-        self.prompt_entry.pack(pady=10)
-        ctk.CTkButton(analysis_panel, text="Analyze", command=self.run_analysis).pack(pady=10)
-        self.result_label = ctk.CTkLabel(analysis_panel, text="", wraplength=400, justify="left")
-        self.result_label.pack(pady=10)
-
-        # Data Source Section (in sidebar)
-        ctk.CTkLabel(sidebar, text="Choose Data Source").pack(pady=5)
-        self.source_menu = ctk.CTkOptionMenu(sidebar, variable=self.data_source, values=["Excel/CSV", "SQL Database", "SharePoint List"])
-        self.source_menu.pack(pady=5)
-        self.input_section = ctk.CTkFrame(sidebar)
-        self.input_section.pack(pady=10, fill="x")
-        ctk.CTkButton(sidebar, text="Load", command=self.load_source_screen).pack(pady=10)
 
     def load_source_screen(self):
         for widget in self.input_section.winfo_children():
