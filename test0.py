@@ -14,7 +14,8 @@ class DataWizardApp:
         ctk.set_default_color_theme("blue")
 
         # Initialize state variables
-        self.data_source = ctk.StringVar(value="Excel/CSV")
+        # CHANGE 1: Dropdown starts with a placeholder
+        self.data_source = ctk.StringVar(value="--- Select Source ---")
         self.file_path = ctk.StringVar(value="No file selected")
         self.df = None
         self.entries = {}
@@ -22,7 +23,6 @@ class DataWizardApp:
         self.build_main_layout()
 
     def build_main_layout(self):
-        # Clear previous widgets to rebuild the layout
         for widget in self.root.winfo_children():
             widget.destroy()
 
@@ -51,8 +51,10 @@ class DataWizardApp:
             org_label = ctk.CTkLabel(sidebar, image=org_logo, text="")
             org_label.image = org_logo
             org_label.pack(side="bottom", pady=10)
-        except:
-            pass
+        except FileNotFoundError:
+            print("Warning: org_logo.png not found. Skipping image.")
+        except Exception as e:
+            print(f"Error loading image: {e}")
 
         # Main area
         main_area = ctk.CTkFrame(self.scrollable_area)
@@ -64,15 +66,21 @@ class DataWizardApp:
         source_selection_frame = ctk.CTkFrame(main_area)
         source_selection_frame.pack(pady=10)
         ctk.CTkLabel(source_selection_frame, text="Choose Data Source:").pack(side="left", padx=5)
+        # CHANGE 2: Add placeholder to values and command to enable button
         self.source_menu = ctk.CTkOptionMenu(source_selection_frame, variable=self.data_source,
-                                             values=["Excel/CSV", "SQL Database", "SharePoint List"])
+                                             values=["--- Select Source ---", "Excel/CSV", "SQL Database", "SharePoint List"],
+                                             command=self.on_source_menu_change) # New command
         self.source_menu.pack(side="left", padx=5)
-        self.submit_source_button = ctk.CTkButton(source_selection_frame, text="Submit Source", command=self.display_source_inputs)
+        self.submit_source_button = ctk.CTkButton(source_selection_frame, text="Submit Source",
+                                                  command=self.display_source_inputs, state="disabled") # CHANGE 3: Initially disabled
         self.submit_source_button.pack(side="left", padx=15)
 
         # --- Dynamic Input Section ---
         self.input_section = ctk.CTkFrame(main_area)
         self.input_section.pack(pady=10, fill="x", padx=20)
+        # Add an initial placeholder label inside input_section
+        self.input_section_placeholder_label = ctk.CTkLabel(self.input_section, text="Please select a data source and click 'Submit Source'.", wraplength=400, justify="center")
+        self.input_section_placeholder_label.pack(pady=40) # Give it some padding
 
         # --- Connect/Load and Back Buttons ---
         action_buttons_frame = ctk.CTkFrame(main_area)
@@ -81,7 +89,6 @@ class DataWizardApp:
         self.connect_load_button = ctk.CTkButton(action_buttons_frame, text="Connect/Load Data", command=self.perform_data_load, state="disabled")
         self.connect_load_button.pack(side="left", padx=10)
 
-        # New Back Button
         self.back_button = ctk.CTkButton(action_buttons_frame, text="Reset / Back", command=self.reset_application)
         self.back_button.pack(side="left", padx=10)
 
@@ -114,25 +121,47 @@ class DataWizardApp:
         self.result_label = ctk.CTkLabel(main_area, text="AI analysis results will be displayed here.", wraplength=600, justify="left")
         self.result_label.pack(pady=20)
 
-        # Initialize the state (display Excel/CSV inputs by default and disable analysis buttons)
-        self.display_source_inputs() # This will also set the initial state of connect_load_button
-        self.update_analysis_buttons_state(False) # Ensure analyze/summarize are disabled
+        # Ensure analysis and connect/load buttons are disabled initially
+        self.update_analysis_buttons_state(False)
+        self.connect_load_button.configure(state="disabled")
+
+    def on_source_menu_change(self, choice):
+        """Callback for when a new option is selected in the data source dropdown."""
+        if choice == "--- Select Source ---":
+            self.submit_source_button.configure(state="disabled")
+        else:
+            self.submit_source_button.configure(state="normal")
+        # When source is changed, clear current inputs and reset data load button
+        self.reset_input_section_state()
+
+    def reset_input_section_state(self):
+        """Clears the dynamic input section and resets data-related state."""
+        for widget in self.input_section.winfo_children():
+            widget.destroy() # Clear previous widgets
+        # Re-add the placeholder when the input section is cleared
+        self.input_section_placeholder_label = ctk.CTkLabel(self.input_section, text="Please select a data source and click 'Submit Source'.", wraplength=400, justify="center")
+        self.input_section_placeholder_label.pack(pady=40)
+
+        self.entries.clear()
+        self.file_path.set("No file selected")
+        self.df = None
+        self.connect_load_button.configure(state="disabled")
+        self.update_analysis_buttons_state(False)
+        self.summary_label.configure(text="AI summary will appear here.")
+        self.result_label.configure(text="AI analysis results will be displayed here.")
+        self.prompt_entry.delete(0, ctk.END) # Clear prompt entry
+
 
     def reset_application(self):
         """Resets the application to its initial state."""
         # Reset state variables
-        self.data_source.set("Excel/CSV") # Default choice
+        self.data_source.set("--- Select Source ---") # Set dropdown to placeholder
         self.file_path.set("No file selected")
         self.df = None
         self.entries.clear()
 
-        # Clear input fields and labels
-        for widget in self.input_section.winfo_children():
-            widget.destroy()
-
-        self.summary_label.configure(text="AI summary will appear here.")
-        self.result_label.configure(text="AI analysis results will be displayed here.")
-        self.prompt_entry.delete(0, ctk.END) # Clear prompt entry
+        # Clear input fields and labels in input_section
+        self.reset_input_section_state() # Use the new helper function
 
         # Hide any loading indicators
         self.loading_label_data_load.pack_forget()
@@ -142,19 +171,21 @@ class DataWizardApp:
         # Reset button states
         self.connect_load_button.configure(state="disabled")
         self.update_analysis_buttons_state(False) # Disable summarize/analyze buttons
+        self.submit_source_button.configure(state="disabled") # Ensure submit source is disabled on full reset
 
-        # Re-display initial Excel/CSV input fields
-        self.display_source_inputs() # This will ensure the "Load File" button is disabled initially
         messagebox.showinfo("Reset", "Application has been reset to its initial state.")
 
 
     def display_source_inputs(self):
         """
         Clears existing input fields and displays new ones based on the selected data source.
-        This is called when "Submit Source" button is clicked or during reset.
+        This is called when "Submit Source" button is clicked.
         """
+        # Remove the placeholder label
+        self.input_section_placeholder_label.pack_forget()
         for widget in self.input_section.winfo_children():
-            widget.destroy() # Clear previous widgets
+            widget.destroy() # Clear previous widgets (if any, though should be just placeholder)
+
         self.entries.clear() # Clear stored entries
         self.file_path.set("No file selected") # Reset file path display
         self.df = None # Clear any previously loaded dataframe
@@ -202,6 +233,10 @@ class DataWizardApp:
                 entry.pack(side="left", fill="x", expand=True, padx=5)
                 self.entries[key_name] = entry
             self.connect_load_button.configure(text="Connect to SharePoint", state="normal") # Enable for manual input
+        
+        else: # If "--- Select Source ---" somehow gets submitted
+            self.connect_load_button.configure(state="disabled")
+
 
     def browse_file(self):
         file = filedialog.askopenfilename(filetypes=[("CSV/Excel files", "*.csv *.xlsx")])
@@ -213,14 +248,15 @@ class DataWizardApp:
             self.connect_load_button.configure(state="disabled")
 
     def perform_data_load(self):
-        """
-        Handles the actual data loading/connection based on the selected source
-        and entered details. Called by the "Connect/Load Data" button.
-        """
         self.loading_label_data_load.pack(pady=5)
-        self.root.update_idletasks() # Force UI update
+        self.root.update_idletasks()
 
         source = self.data_source.get()
+        if source == "--- Select Source ---":
+            messagebox.showwarning("Selection Error", "Please select a valid data source before connecting/loading.")
+            self.loading_label_data_load.pack_forget()
+            return
+
         try:
             if source == "Excel/CSV":
                 if not self.file_path.get() or self.file_path.get() == "No file selected":
@@ -231,30 +267,46 @@ class DataWizardApp:
                 messagebox.showinfo("Success", "File loaded successfully!")
             elif source == "SQL Database":
                 params = {k: v.get() for k, v in self.entries.items()}
-                if not all(params.values()):
-                    messagebox.showerror("Input Error", "Please fill all SQL database connection details.")
-                    self.df = None
-                    return
+                # Map old keys to new (if necessary, though they are already consistent)
+                params_for_backend = {
+                    "dialect": params.get("dialect", ""),
+                    "username": params.get("username", ""),
+                    "password": params.get("password", ""),
+                    "host": params.get("host", ""),
+                    "port": params.get("port", ""),
+                    "database": params.get("database", ""),
+                    "sql_query": params.get("sql_query", "")
+                }
+                if not all(params_for_backend[key] for key in ["dialect", "username", "password", "host", "port", "database", "sql_query"]):
+                     messagebox.showerror("Input Error", "Please fill all SQL database connection details.")
+                     self.df = None
+                     return
+
                 self.df = backend1.load_sql_table(
-                    params["dialect"], params["username"], params["password"],
-                    params["host"], params["port"], params["database"], params["sql_query"]
+                    params_for_backend["dialect"], params_for_backend["username"], params_for_backend["password"],
+                    params_for_backend["host"], params_for_backend["port"], params_for_backend["database"], params_for_backend["sql_query"]
                 )
                 messagebox.showinfo("Success", "SQL data loaded successfully!")
             elif source == "SharePoint List":
                 params = {k: v.get() for k, v in self.entries.items()}
-                if not all(params.values()):
-                    messagebox.showerror("Input Error", "Please fill all SharePoint connection details.")
-                    self.df = None
-                    return
+                params_for_backend = {
+                    "site_url": params.get("site_url", ""),
+                    "list_name": params.get("list_name", ""),
+                    "client_id": params.get("client_id", ""),
+                    "client_secret": params.get("client_secret", "")
+                }
+                if not all(params_for_backend[key] for key in ["site_url", "list_name", "client_id", "client_secret"]):
+                     messagebox.showerror("Input Error", "Please fill all SharePoint connection details.")
+                     self.df = None
+                     return
                 self.df = backend1.load_sharepoint_list(
-                    params["site_url"], params["list_name"], params["client_id"], params["client_secret"]
+                    params_for_backend["site_url"], params_for_backend["list_name"], params_for_backend["client_id"], params_for_backend["client_secret"]
                 )
                 messagebox.showinfo("Success", "SharePoint data loaded successfully!")
             
-            # If data load was successful:
             self.update_analysis_buttons_state(True)
-            self.summary_label.configure(text="AI summary will appear here.") # Reset summary on new load
-            self.result_label.configure(text="AI analysis results will be displayed here.") # Reset results on new load
+            self.summary_label.configure(text="AI summary will appear here.")
+            self.result_label.configure(text="AI analysis results will be displayed here.")
 
         except Exception as e:
             messagebox.showerror("Connection/Load Error", str(e))
@@ -264,7 +316,6 @@ class DataWizardApp:
             self.loading_label_data_load.pack_forget()
 
     def update_analysis_buttons_state(self, enabled=False):
-        """Enables or disables the Summarize and Analyze buttons."""
         state = "normal" if enabled and self.df is not None else "disabled"
         self.summarize_button.configure(state=state)
         self.analyze_button.configure(state=state)
