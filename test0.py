@@ -34,27 +34,48 @@ class DataAnalyzerApp:
         self.input_section = None
         self.input_section_placeholder_label = None
 
+        # Load icons for tabs at initialization
+        # Ensure these image files exist in the same directory as your script
+        self.icon_data_connection = self.load_icon("data_connection_icon.png", (24, 24)) # Example icon names
+        self.icon_summarize_data = self.load_icon("summarize_data_icon.png", (24, 24))
+        self.icon_analyze_data = self.load_icon("analyze_data_icon.png", (24, 24))
 
         self.build_main_layout()
+
+    def load_icon(self, path, size):
+        """Helper to load and resize images for icons."""
+        try:
+            img = Image.open(path).resize(size)
+            return ctk.CTkImage(light_image=img, dark_image=img, size=size)
+        except FileNotFoundError:
+            print(f"Warning: {path} not found. Icon will not be displayed.")
+            return None # Return None if image not found
 
     def build_main_layout(self):
         for widget in self.root.winfo_children():
             widget.destroy()
 
-        self.root.grid_columnconfigure(0, weight=0) 
-        self.root.grid_columnconfigure(1, weight=1) 
-        self.root.grid_rowconfigure(0, weight=1) 
-
         self.root.configure(fg_color="#4B0082") 
 
-        self.sidebar_frame = ctk.CTkFrame(self.root, 
+        # Create a main container frame that fills the entire root window
+        self.main_container_frame = ctk.CTkFrame(self.root, fg_color="#4B0082", corner_radius=0)
+        self.main_container_frame.pack(fill="both", expand=True) # Use pack to make it fill the root
+
+        # Now, configure the grid for this container frame.
+        # This is where your sidebar and main content will be gridded.
+        self.main_container_frame.grid_columnconfigure(0, weight=0) # Sidebar column - fixed width
+        self.main_container_frame.grid_columnconfigure(1, weight=1) # Main content column - expands
+        self.main_container_frame.grid_rowconfigure(0, weight=1) # The single row of the main container - expands
+
+
+        self.sidebar_frame = ctk.CTkFrame(self.main_container_frame, # Parent is now main_container_frame
                                           width=280, 
                                           corner_radius=0, 
                                           fg_color="#3A2B5B") 
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
 
 
-        self.main_content_frame = ctk.CTkFrame(self.root, 
+        self.main_content_frame = ctk.CTkFrame(self.main_container_frame, # Parent is now main_container_frame
                                                corner_radius=0, 
                                                fg_color="#5D40A4") 
         self.main_content_frame.grid(row=0, column=1, sticky="nsew")
@@ -151,13 +172,12 @@ class DataAnalyzerApp:
             print(f"Warning: {bottom_image_path} not found. Showing text placeholder.")
 
 
-        # --- Main Content Area Population (Step 3 Content Starts Here) ---
+        # --- Main Content Area Population ---
         # Configure the grid for the main_content_frame to hold header, separator, and tabview
-        self.main_content_frame.grid_columnconfigure(0, weight=1) # Single column to expand horizontally
-        self.main_content_frame.grid_rowconfigure(0, weight=0) # Title row (fixed height)
-        self.main_content_frame.grid_rowconfigure(1, weight=0) # Separator line row (fixed height)
-        self.main_content_frame.grid_rowconfigure(2, weight=1) # Tabview row (expands vertically)
-
+        self.main_content_frame.grid_columnconfigure(0, weight=1) 
+        self.main_content_frame.grid_rowconfigure(0, weight=0) 
+        self.main_content_frame.grid_rowconfigure(1, weight=0) 
+        self.main_content_frame.grid_rowconfigure(2, weight=1) 
 
         # Main Content Header
         ctk.CTkLabel(self.main_content_frame, text="🚀 Data Analyzer", 
@@ -169,32 +189,50 @@ class DataAnalyzerApp:
 
         # Create the CTkTabview
         self.tabview = ctk.CTkTabview(self.main_content_frame, 
-                                      fg_color="#4B0082", # Background color for the tabview itself
-                                      segmented_button_fg_color="#3A2B5B", # Color of the selected tab button
-                                      segmented_button_selected_color="#6A5ACD", # Highlight color for the selected tab
-                                      segmented_button_selected_hover_color="#7B68EE", # Hover color for selected tab
-                                      segmented_button_unselected_color="#3A2B5B", # Color of unselected tab buttons
-                                      segmented_button_unselected_hover_color="#5D40A4", # Hover color for unselected tab
-                                      text_color="white", # Text color for tab titles
-                                      width=1100, # Set a reasonable width
-                                      height=700, # Set a reasonable height
-                                      corner_radius=10, # Slightly rounded corners for the tabview frame
-                                      border_width=2,
-                                      border_color="#7B68EE" # A border color that matches the design
+                                       fg_color="#4B0082", 
+                                       segmented_button_fg_color="#3A2B5B", 
+                                       segmented_button_selected_color="#6A5ACD", 
+                                       segmented_button_selected_hover_color="#7B68EE", 
+                                       segmented_button_unselected_color="#3A2B5B", 
+                                       segmented_button_unselected_hover_color="#5D40A4", 
+                                       text_color="white", 
+                                       width=1100, 
+                                       height=700, 
+                                       corner_radius=10, 
+                                       border_width=2,
+                                       border_color="#7B68EE"
                                       )
         self.tabview.grid(row=2, column=0, padx=30, pady=(0, 30), sticky="nsew")
 
-        # Add the tabs
-        self.tabview.add("1. Data Connection")
-        self.tabview.add("2. Summarize Data")
-        self.tabview.add("3. Analyze Data")
+        # Configure the font and border_spacing AFTER the tabview is created
+        # Access the internal _segmented_button widget and configure its properties
+        if hasattr(self.tabview, '_segmented_button'):
+            self.tabview._segmented_button.configure(font=("Arial", 20, "bold"))
+
+
+        # Add the tabs with icons
+        tab_data = [
+            ("1. Data Connection", self.icon_data_connection),
+            ("2. Summarize Data", self.icon_summarize_data),
+            ("3. Analyze Data", self.icon_analyze_data)
+        ]
+
+        for text, icon in tab_data:
+            tab = self.tabview.add(text)
+            # Find the actual CTkButton widget for the tab to set its image
+            if hasattr(self.tabview, '_segmented_button'): # Add check for safety
+                for child in self.tabview._segmented_button.winfo_children():
+                    if isinstance(child, ctk.CTkButton) and child.cget("text") == text:
+                        if icon:
+                            child.configure(image=icon, compound="left")
+                        break
+
 
         # Set default active tab
-        self.tabview.set("1. Data Connection") # Start with the Data Connection tab open
+        self.tabview.set("1. Data Connection")
 
 
-        # Placeholder content for each tab (will be filled in subsequent steps)
-       
+        # Placeholder content for each tab
         ctk.CTkLabel(self.tabview.tab("1. Data Connection"), text="Data Connection Form will go here", text_color="white", font=("Arial", 18)).pack(pady=20)
         ctk.CTkLabel(self.tabview.tab("2. Summarize Data"), text="Data Summary UI will go here", text_color="white", font=("Arial", 18)).pack(pady=20)
         ctk.CTkLabel(self.tabview.tab("3. Analyze Data"), text="Data Analysis UI will go here", text_color="white", font=("Arial", 18)).pack(pady=20)
@@ -206,7 +244,6 @@ class DataAnalyzerApp:
             widget.destroy()
 
     def show_dashboard_view(self):
-       
         pass
 
 
