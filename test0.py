@@ -2,7 +2,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk 
 
-import backend # Now correctly imports your backend.py
+import backend 
 
 class DataAnalyzerApp:
     def __init__(self, root):
@@ -15,7 +15,7 @@ class DataAnalyzerApp:
         ctk.set_default_color_theme("blue") 
 
         self.df = None 
-        self.entries = {} # Dictionary to store references to entry widgets for dynamic access
+        self.entries = {} 
         
         self.file_path = ctk.StringVar(value="No file selected")
         self.data_source = ctk.StringVar(value="--- Select Source ---") 
@@ -40,12 +40,13 @@ class DataAnalyzerApp:
         self.icon_analyze_data = self.load_icon("analyze_data_icon.png", (24, 24))
         self.icon_file_upload = self.load_icon("upload_icon.png", (20, 20)) 
         self.icon_database = self.load_icon("database_icon.png", (20, 20)) 
-        self.icon_sharepoint = self.load_icon("sharepoint_icon.png", (20, 20)) # New icon for SharePoint
+        self.icon_sharepoint = self.load_icon("sharepoint_icon.png", (20, 20)) 
+        self.icon_reset = self.load_icon("reset_icon.png", (20, 20))
 
         self.build_main_layout()
 
     def load_icon(self, path, size):
-        """Helper to load and resize images for icons."""
+       
         try:
             img = Image.open(path).resize(size)
             return ctk.CTkImage(light_image=img, dark_image=img, size=size)
@@ -54,6 +55,12 @@ class DataAnalyzerApp:
             return None 
 
     def build_main_layout(self):
+        
+        self.df = None 
+        self.entries = {} 
+        self.file_path.set("No file selected")
+        self.data_source.set("--- Select Source ---") 
+
         for widget in self.root.winfo_children():
             widget.destroy()
 
@@ -72,14 +79,20 @@ class DataAnalyzerApp:
                                           fg_color="#3A2B5B") 
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
 
-        self.main_content_frame = ctk.CTkFrame(self.main_container_frame,
-                                               corner_radius=0, 
-                                               fg_color="#5D40A4") 
-        self.main_content_frame.grid(row=0, column=1, sticky="nsew")
+        self.main_content_scroll_frame = ctk.CTkScrollableFrame(self.main_container_frame,
+                                                                 corner_radius=0, 
+                                                                 fg_color="#5D40A4",
+                                                                 scrollbar_button_color="#7B68EE",
+                                                                 scrollbar_button_hover_color="#9B7AEF")
+        self.main_content_scroll_frame.grid(row=0, column=1, sticky="nsew")
 
-        self.sidebar_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7, 9), weight=0) 
+        self.main_content_frame = ctk.CTkFrame(self.main_content_scroll_frame, 
+                                               corner_radius=0, 
+                                               fg_color="#5D40A4")
+        self.main_content_frame.pack(fill="both", expand=True) 
+
+        self.sidebar_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7, 9, 10), weight=0) 
         self.sidebar_frame.grid_rowconfigure(8, weight=1) 
-        
         current_row = 0
 
         try:
@@ -147,6 +160,20 @@ class DataAnalyzerApp:
         self.sidebar_frame.grid_rowconfigure(current_row, weight=1)
         current_row += 1 
 
+      
+        self.reset_button = ctk.CTkButton(self.sidebar_frame,
+                                          text="Reset Application",
+                                          command=self.reset_application,
+                                          font=("Arial", 18, "bold"),
+                                          fg_color="#8B0000", 
+                                          hover_color="#DC143C", 
+                                          height=45,
+                                          image=self.icon_reset, 
+                                          compound="left",
+                                          anchor="center") 
+        self.reset_button.grid(row=current_row, column=0, columnspan=2, padx=20, pady=(20, 10), sticky="ew")
+        current_row += 1
+
         try:
             bottom_image_path = "org_logo.png" 
             bottom_img = Image.open(bottom_image_path).resize((300, 80)) 
@@ -208,31 +235,44 @@ class DataAnalyzerApp:
 
 
     def clear_frame_widgets(self, frame):
-        """Helper method to destroy all widgets within a given frame."""
+        
         for widget in frame.winfo_children():
             widget.destroy()
 
     def build_data_connection_tab(self):
-        """Builds the content for the '1. Data Connection' tab."""
+        
         tab = self.tabview.tab("1. Data Connection")
         self.clear_frame_widgets(tab) 
 
         tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6), weight=0)
-        tab.grid_rowconfigure(7, weight=1) 
-
+        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7), weight=0) 
+        tab.grid_rowconfigure(8, weight=1)
+        
         current_row = 0
 
+      
+        try:
+           
+            data_connection_img = Image.open("database_icon_large.png").resize((200, 200)) 
+            self.data_connection_ctk_img = ctk.CTkImage(light_image=data_connection_img, 
+                                                       dark_image=data_connection_img, 
+                                                       size=(200, 200))
+            ctk.CTkLabel(tab, text="", image=self.data_connection_ctk_img).grid(row=current_row, column=0, pady=(30, 10))
+        except FileNotFoundError:
+            ctk.CTkLabel(tab, text="🗄️", font=("Arial", 100), text_color="#ADFF2F").grid(row=current_row, column=0, pady=(30, 10))
+            print("Warning: database_icon_large.png not found. Showing text placeholder.")
+        current_row += 1
+        
+
         ctk.CTkLabel(tab, text="Establish Your Data Connection", 
-                     font=("Arial", 26, "bold"), text_color="white").grid(row=current_row, column=0, pady=(30, 15))
+                     font=("Arial", 26, "bold"), text_color="white").grid(row=current_row, column=0, pady=(15, 15))
         current_row += 1
 
         ctk.CTkLabel(tab, text="Select Data Source:", font=("Arial", 18, "bold"), text_color="#D3D3D3").grid(row=current_row, column=0, pady=(10, 5), sticky="w", padx=50)
         current_row += 1
 
-        # Updated values for data source selection, including SharePoint
         self.data_source_optionmenu = ctk.CTkOptionMenu(tab, 
-                                                        values=["--- Select Source ---", "CSV/Excel File", "Database (SQL)", "SharePoint List"], # Added SharePoint
+                                                        values=["--- Select Source ---", "CSV/Excel File", "Database (SQL)", "SharePoint List"], 
                                                         variable=self.data_source,
                                                         command=self.on_data_source_select,
                                                         font=("Arial", 16),
@@ -240,9 +280,13 @@ class DataAnalyzerApp:
                                                         width=300,
                                                         height=40,
                                                         fg_color="#6A5ACD",
-                                                        button_color="#5D40A4",
-                                                        button_hover_color="#7B68EE",
-                                                        text_color="white")
+                                                        button_color="#5D40A4", 
+                                                        button_hover_color="#7B68EE", 
+                                                        text_color="white",
+                                                        dropdown_fg_color="#642392", 
+                                                        dropdown_hover_color="#5D40A4", 
+                                                        dropdown_text_color="white" 
+                                                       )
         self.data_source_optionmenu.grid(row=current_row, column=0, pady=(0, 20), sticky="ew", padx=50)
         current_row += 1
 
@@ -274,7 +318,7 @@ class DataAnalyzerApp:
                      font=("Arial", 16), text_color="#A9A9A9").grid(row=current_row, column=0, pady=20)
         current_row += 1
         
-        tab.grid_rowconfigure(current_row, weight=1) 
+        tab.grid_rowconfigure(current_row, weight=1)
 
 
     def on_data_source_select(self, choice):
@@ -282,13 +326,13 @@ class DataAnalyzerApp:
         self.clear_frame_widgets(self.input_section) 
         self.connect_load_button.configure(state="normal") 
         self.loading_label_data_load.configure(text="") 
-        self.entries = {} # Clear stored entries for new source type
+        self.entries = {} 
 
         if choice == "CSV/Excel File":
             self.build_file_input_fields()
         elif choice == "Database (SQL)":
             self.build_database_input_fields()
-        elif choice == "SharePoint List": # New condition for SharePoint
+        elif choice == "SharePoint List": 
             self.build_sharepoint_input_fields()
         else:
             self.input_section_placeholder_label = ctk.CTkLabel(self.input_section, 
@@ -298,7 +342,7 @@ class DataAnalyzerApp:
             self.connect_load_button.configure(state="disabled")
 
     def build_file_input_fields(self):
-        """Builds input fields for CSV/Excel file selection."""
+        #Builds input fields for CSV/Excel file selection.
         self.input_section.grid_columnconfigure(0, weight=1) 
         self.input_section.grid_columnconfigure(1, weight=0) 
 
@@ -310,7 +354,7 @@ class DataAnalyzerApp:
                                             font=("Arial", 14),
                                             placeholder_text="e.g., /home/user/data.csv or C:/data/data.xlsx")
         self.file_path_entry.grid(row=1, column=0, padx=(0, 10), sticky="ew", pady=(0,10))
-        self.entries['file_path_entry'] = self.file_path_entry # Store reference
+        self.entries['file_path_entry'] = self.file_path_entry 
 
         self.browse_button = ctk.CTkButton(self.input_section, 
                                           text="Browse", 
@@ -326,8 +370,8 @@ class DataAnalyzerApp:
 
     def build_database_input_fields(self):
         """Builds input fields for database connection."""
-        self.input_section.grid_columnconfigure(0, weight=0) # Labels
-        self.input_section.grid_columnconfigure(1, weight=1) # Entries
+        self.input_section.grid_columnconfigure(0, weight=0) 
+        self.input_section.grid_columnconfigure(1, weight=1) 
 
         fields = [
             ("Dialect (e.g., postgresql, mysql, sqlite)", "dialect"), 
@@ -335,30 +379,19 @@ class DataAnalyzerApp:
             ("Port", "port"), 
             ("Database Name", "database_name"), 
             ("Username", "username"), 
-            ("Password", "password"),
-            ("SQL Query (e.g., SELECT * FROM my_table)", "sql_query")
+            ("Password", "password")
         ]
         
         for i, (label_text, entry_key) in enumerate(fields):
             ctk.CTkLabel(self.input_section, text=f"{label_text}:", font=("Arial", 16), text_color="#D3D3D3").grid(row=i, column=0, sticky="w", pady=5, padx=(0,10))
-            if entry_key == "sql_query":
-                # Use CTkTextbox for SQL query
-                entry_widget = ctk.CTkTextbox(self.input_section, 
-                                                width=400,
-                                                height=100, # Taller for query
-                                                font=("Arial", 14),
-                                                wrap="word") # Wrap text
-                entry_widget.insert("0.0", "SELECT * FROM your_table;") # Default query
-                entry_widget.grid(row=i, column=1, sticky="ew", pady=5)
-            else:
-                entry_widget = ctk.CTkEntry(self.input_section, 
-                                            width=400,
-                                            height=35,
-                                            font=("Arial", 14),
-                                            placeholder_text=f"Enter {label_text.lower()}")
-                if entry_key == "password":
-                    entry_widget.configure(show="*") # Mask password
-                entry_widget.grid(row=i, column=1, sticky="ew", pady=5)
+            entry_widget = ctk.CTkEntry(self.input_section, 
+                                        width=400,
+                                        height=35,
+                                        font=("Arial", 14),
+                                        placeholder_text=f"Enter {label_text.lower()}")
+            if entry_key == "password":
+                entry_widget.configure(show="*") 
+            entry_widget.grid(row=i, column=1, sticky="ew", pady=5)
             self.entries[entry_key] = entry_widget 
 
         ctk.CTkLabel(self.input_section, text="Note: For security, sensitive information is not saved.", 
@@ -366,9 +399,9 @@ class DataAnalyzerApp:
 
 
     def build_sharepoint_input_fields(self):
-        """Builds input fields for SharePoint connection."""
-        self.input_section.grid_columnconfigure(0, weight=0) # Labels
-        self.input_section.grid_columnconfigure(1, weight=1) # Entries
+        #Builds input fields for SharePoint connection.
+        self.input_section.grid_columnconfigure(0, weight=0) 
+        self.input_section.grid_columnconfigure(1, weight=1) 
 
         fields = [
             ("SharePoint Site URL", "site_url"),
@@ -385,7 +418,7 @@ class DataAnalyzerApp:
                                         font=("Arial", 14),
                                         placeholder_text=f"Enter {label_text.lower()}")
             if entry_key == "client_secret":
-                entry_widget.configure(show="*") # Mask client secret
+                entry_widget.configure(show="*") 
             entry_widget.grid(row=i, column=1, sticky="ew", pady=5)
             self.entries[entry_key] = entry_widget
 
@@ -393,13 +426,12 @@ class DataAnalyzerApp:
                      font=("Arial", 12, "italic"), text_color="#A9A9A9", wraplength=450).grid(row=len(fields), column=0, columnspan=2, pady=(10,0), sticky="w")
 
     def browse_file(self):
-        """Opens a file dialog for CSV/Excel file selection."""
+        #Opens a file dialog for CSV/Excel file selection.
         filetypes = [("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv"), ("All files", "*.*")]
         path = filedialog.askopenfilename(filetypes=filetypes)
         if path:
             self.file_path.set(path)
             self.loading_label_data_load.configure(text=f"Selected: {path.split('/')[-1]}", text_color="#ADFF2F")
-            # Update the entry widget directly if it exists
             if 'file_path_entry' in self.entries:
                 self.entries['file_path_entry'].delete(0, ctk.END)
                 self.entries['file_path_entry'].insert(0, path)
@@ -407,16 +439,15 @@ class DataAnalyzerApp:
             self.loading_label_data_load.configure(text="File selection cancelled.", text_color="orange")
 
     def load_data(self):
-        """Initiates data loading based on the selected source."""
+        #Initiates data loading based on the selected source
         current_source = self.data_source.get()
         self.loading_label_data_load.configure(text="Loading data...", text_color="yellow")
-        self.df = None # Reset DataFrame
+        self.df = None 
 
         if current_source == "CSV/Excel File":
             file_path = self.file_path.get()
             if file_path and file_path != "No file selected":
                 try:
-                    # Corrected call: Use load_excel_csv from backend
                     self.df = backend.load_excel_csv(file_path) 
                     self.loading_label_data_load.configure(text=f"Data loaded successfully from {file_path.split('/')[-1]}!", text_color="#ADFF2F")
                     messagebox.showinfo("Success", f"Data loaded successfully from {file_path.split('/')[-1]}!")
@@ -430,16 +461,16 @@ class DataAnalyzerApp:
 
         elif current_source == "Database (SQL)":
             db_config = {key: self.entries[key].get() for key in ["dialect", "host", "port", "database_name", "username", "password"]}
-            sql_query = self.entries["sql_query"].get("0.0", "end") # Get content from CTkTextbox
             
-            # Basic validation for SQL
-            if not all(db_config.values()) or not sql_query.strip():
-                self.loading_label_data_load.configure(text="Please fill all database fields and provide a query.", text_color="orange")
-                messagebox.showwarning("Missing Fields", "Please fill all database connection details and the SQL query.")
+            if not all(db_config.values()): 
+                self.loading_label_data_load.configure(text="Please fill all database fields.", text_color="orange")
+                messagebox.showwarning("Missing Fields", "Please fill all database connection details.")
                 return
 
             try:
-                self.loading_label_data_load.configure(text="Connecting to database and fetching data...", text_color="yellow")
+                self.loading_label_data_load.configure(text="Connecting to database...", text_color="yellow")
+                
+                dummy_sql_query = "SELECT * FROM some_default_table;" 
                 self.df = backend.load_sql_table(
                     dialect=db_config['dialect'],
                     username=db_config['username'],
@@ -447,7 +478,7 @@ class DataAnalyzerApp:
                     host=db_config['host'],
                     port=db_config['port'],
                     database=db_config['database_name'],
-                    sql_query=sql_query
+                    sql_query=dummy_sql_query 
                 )
                 self.loading_label_data_load.configure(text="Data loaded successfully from SQL database!", text_color="#ADFF2F")
                 messagebox.showinfo("Success", "Data loaded successfully from SQL database!")
@@ -456,10 +487,9 @@ class DataAnalyzerApp:
                 self.loading_label_data_load.configure(text=f"Database error: {e}", text_color="red")
                 messagebox.showerror("Database Error", f"Failed to load data from database: {e}")
 
-        elif current_source == "SharePoint List": # New logic for SharePoint
+        elif current_source == "SharePoint List": 
             sp_config = {key: self.entries[key].get() for key in ["site_url", "list_name", "client_id", "client_secret"]}
 
-            # Basic validation for SharePoint
             if not all(sp_config.values()):
                 self.loading_label_data_load.configure(text="Please fill all SharePoint fields.", text_color="orange")
                 messagebox.showwarning("Missing Fields", "Please fill all SharePoint connection details.")
@@ -484,8 +514,12 @@ class DataAnalyzerApp:
             self.loading_label_data_load.configure(text="Please select a data source.", text_color="red")
             messagebox.showwarning("No Source Selected", "Please select a data source type from the dropdown.")
 
-    def show_dashboard_view(self):
-        pass
+    def reset_application(self):
+        #Resets the application to its initial state.
+        response = messagebox.askyesno("Reset Application", "Are you sure you want to reset the application? All loaded data will be cleared.")
+        if response:
+            self.build_main_layout() 
+            messagebox.showinfo("Reset", "Application has been reset.")
 
 
 # --- Application Entry Point ---
