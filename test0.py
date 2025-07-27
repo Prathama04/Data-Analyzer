@@ -1,6 +1,7 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk 
+import pandas as pd 
 
 import backend 
 
@@ -22,17 +23,18 @@ class DataAnalyzerApp:
 
         self.tabview = None
         self.loading_label_data_load = None
-        self.loading_label_summary = None
+        self.loading_label_summary = None 
         self.loading_label_analysis = None
-        self.submit_source_button = None
+        self.submit_source_button = None 
         self.connect_load_button = None
-        self.summarize_button = None
+        self.summarize_button = None 
         self.analyze_button = None
-        self.summary_label = None
+        self.summary_output_textbox = None 
         self.result_label = None
         self.prompt_entry = None
         self.input_section = None
         self.input_section_placeholder_label = None
+        self.data_preview_label = None 
 
         # Load icons for tabs at initialization
         self.icon_data_connection = self.load_icon("data_connection_icon.png", (24, 24))
@@ -41,12 +43,15 @@ class DataAnalyzerApp:
         self.icon_file_upload = self.load_icon("upload_icon.png", (20, 20)) 
         self.icon_database = self.load_icon("database_icon.png", (20, 20)) 
         self.icon_sharepoint = self.load_icon("sharepoint_icon.png", (20, 20)) 
-        self.icon_reset = self.load_icon("reset_icon.png", (20, 20))
+        self.icon_reset = self.load_icon("reset_icon.png", (20, 20)) 
+        self.icon_summarize_dataset = self.load_icon("summarize_icon.png", (20, 20)) 
+        self.data_connection_tab_icon = self.load_icon("database_icon_large.png", (200, 200))
+        self.summary_feature_image = self.load_icon("summary_feature_image.png", (300, 200)) 
 
         self.build_main_layout()
 
     def load_icon(self, path, size):
-       
+        """Helper to load and resize images for icons."""
         try:
             img = Image.open(path).resize(size)
             return ctk.CTkImage(light_image=img, dark_image=img, size=size)
@@ -55,7 +60,7 @@ class DataAnalyzerApp:
             return None 
 
     def build_main_layout(self):
-        
+        # Reset internal state variables
         self.df = None 
         self.entries = {} 
         self.file_path.set("No file selected")
@@ -93,6 +98,7 @@ class DataAnalyzerApp:
 
         self.sidebar_frame.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7, 9, 10), weight=0) 
         self.sidebar_frame.grid_rowconfigure(8, weight=1) 
+        
         current_row = 0
 
         try:
@@ -157,10 +163,9 @@ class DataAnalyzerApp:
                             "AI Analysis", "Natural language queries", current_row)
         current_row += 1
 
-        self.sidebar_frame.grid_rowconfigure(current_row, weight=1)
+        self.sidebar_frame.grid_rowconfigure(current_row, weight=1) 
         current_row += 1 
 
-      
         self.reset_button = ctk.CTkButton(self.sidebar_frame,
                                           text="Reset Application",
                                           command=self.reset_application,
@@ -227,42 +232,39 @@ class DataAnalyzerApp:
                     if isinstance(child, ctk.CTkButton) and child.cget("text") == text:
                         if icon:
                             child.configure(image=icon, compound="left")
+                        child.configure(command=lambda t=text: self.on_tab_select(t))
                         break
 
         self.tabview.set("1. Data Connection")
 
         self.build_data_connection_tab()
-
+        self.build_summarize_data_tab()
+        # You'll call build_analyze_data_tab later for the third tab
 
     def clear_frame_widgets(self, frame):
-        
+        """Helper method to destroy all widgets within a given frame."""
         for widget in frame.winfo_children():
             widget.destroy()
 
     def build_data_connection_tab(self):
-        
+        """Builds the content for the '1. Data Connection' tab."""
         tab = self.tabview.tab("1. Data Connection")
         self.clear_frame_widgets(tab) 
 
         tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7), weight=0) 
-        tab.grid_rowconfigure(8, weight=1)
-        
+        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5), weight=0) 
+        tab.grid_rowconfigure(6, weight=1) 
+        tab.grid_rowconfigure(7, weight=0) 
+        tab.grid_rowconfigure(8, weight=0) 
+        tab.grid_rowconfigure(9, weight=0) 
+
         current_row = 0
 
-      
-        try:
-           
-            data_connection_img = Image.open("database_icon_large.png").resize((200, 200)) 
-            self.data_connection_ctk_img = ctk.CTkImage(light_image=data_connection_img, 
-                                                       dark_image=data_connection_img, 
-                                                       size=(200, 200))
-            ctk.CTkLabel(tab, text="", image=self.data_connection_ctk_img).grid(row=current_row, column=0, pady=(30, 10))
-        except FileNotFoundError:
+        if self.data_connection_tab_icon:
+            ctk.CTkLabel(tab, text="", image=self.data_connection_tab_icon).grid(row=current_row, column=0, pady=(30, 10))
+        else:
             ctk.CTkLabel(tab, text="🗄️", font=("Arial", 100), text_color="#ADFF2F").grid(row=current_row, column=0, pady=(30, 10))
-            print("Warning: database_icon_large.png not found. Showing text placeholder.")
         current_row += 1
-        
 
         ctk.CTkLabel(tab, text="Establish Your Data Connection", 
                      font=("Arial", 26, "bold"), text_color="white").grid(row=current_row, column=0, pady=(15, 15))
@@ -274,59 +276,91 @@ class DataAnalyzerApp:
         self.data_source_optionmenu = ctk.CTkOptionMenu(tab, 
                                                         values=["--- Select Source ---", "CSV/Excel File", "Database (SQL)", "SharePoint List"], 
                                                         variable=self.data_source,
-                                                        command=self.on_data_source_select,
+                                                        command=self.on_data_source_select, 
                                                         font=("Arial", 16),
                                                         dropdown_font=("Arial", 16),
                                                         width=300,
                                                         height=40,
-                                                        fg_color="#6A5ACD",
+                                                        fg_color="#6A5ACD", 
                                                         button_color="#5D40A4", 
                                                         button_hover_color="#7B68EE", 
                                                         text_color="white",
-                                                        dropdown_fg_color="#642392", 
+                                                        dropdown_fg_color="#4B0082", 
                                                         dropdown_hover_color="#5D40A4", 
                                                         dropdown_text_color="white" 
                                                        )
         self.data_source_optionmenu.grid(row=current_row, column=0, pady=(0, 20), sticky="ew", padx=50)
         current_row += 1
 
-        self.input_section = ctk.CTkFrame(tab, fg_color="transparent")
-        self.input_section.grid(row=current_row, column=0, pady=10, sticky="ew", padx=50)
-        self.input_section.grid_columnconfigure(0, weight=1) 
-        self.input_section_placeholder_label = ctk.CTkLabel(self.input_section, 
-                                                            text="Please select a data source to continue.", 
-                                                            font=("Arial", 16), text_color="#A9A9A9")
-        self.input_section_placeholder_label.pack(pady=50)
+        self.submit_source_button = ctk.CTkButton(tab,
+                                                  text="Submit Source Type",
+                                                  command=self.show_source_input_fields, 
+                                                  font=("Arial", 18, "bold"),
+                                                  fg_color="#6A5ACD",
+                                                  hover_color="#7B68EE",
+                                                  height=45,
+                                                  state="disabled" if self.data_source.get() == "--- Select Source ---" else "normal"
+                                                  )
+        self.submit_source_button.grid(row=current_row, column=0, pady=(0, 20), sticky="ew", padx=50)
         current_row += 1
 
+        self.input_section = ctk.CTkFrame(tab, fg_color="transparent")
+        self.input_section.grid(row=current_row, column=0, pady=10, sticky="nsew", padx=50)
+        self.input_section.grid_columnconfigure(0, weight=1) 
+        self.input_section_placeholder_label = ctk.CTkLabel(self.input_section, 
+                                                            text="Click 'Submit Source Type' to see connection fields.", 
+                                                            font=("Arial", 16), text_color="#A9A9A9")
+        self.input_section_placeholder_label.pack(pady=50)
+        
         self.connect_load_button = ctk.CTkButton(tab, 
                                                  text="Connect & Load Data",
                                                  command=self.load_data,
                                                  font=("Arial", 20, "bold"),
                                                  fg_color="#6A5ACD",
                                                  hover_color="#7B68EE",
-                                                 height=50,
-                                                 state="disabled") 
-        self.connect_load_button.grid(row=current_row, column=0, pady=20, sticky="ew", padx=50)
-        current_row += 1
+                                                 height=50) 
 
         self.loading_label_data_load = ctk.CTkLabel(tab, text="", font=("Arial", 16), text_color="#ADFF2F")
-        self.loading_label_data_load.grid(row=current_row, column=0, pady=(0, 10))
-        current_row += 1
-
-        ctk.CTkLabel(tab, text="Loaded Data Preview will appear here...", 
-                     font=("Arial", 16), text_color="#A9A9A9").grid(row=current_row, column=0, pady=20)
-        current_row += 1
-        
-        tab.grid_rowconfigure(current_row, weight=1)
+        self.data_preview_label = ctk.CTkLabel(tab, text="Loaded Data Preview will appear here...", 
+                                               font=("Arial", 16), text_color="#A9A9A9")
 
 
     def on_data_source_select(self, choice):
         """Handles the selection of a data source from the OptionMenu."""
+        if choice == "--- Select Source ---":
+            self.submit_source_button.configure(state="disabled")
+            self.clear_frame_widgets(self.input_section)
+            self.input_section_placeholder_label = ctk.CTkLabel(self.input_section, 
+                                                                text="Click 'Submit Source Type' to see connection fields.", 
+                                                                font=("Arial", 16), text_color="#A9A9A9")
+            self.input_section_placeholder_label.pack(pady=50)
+            self.connect_load_button.grid_forget()
+            self.loading_label_data_load.grid_forget()
+            self.data_preview_label.grid_forget()
+        else:
+            self.submit_source_button.configure(state="normal")
+            self.clear_frame_widgets(self.input_section)
+            self.input_section_placeholder_label = ctk.CTkLabel(self.input_section, 
+                                                                text=f"Selected {choice}. Click 'Submit Source Type' to configure.", 
+                                                                font=("Arial", 16), text_color="#A9A9A9")
+            self.input_section_placeholder_label.pack(pady=50)
+            self.connect_load_button.grid_forget()
+            self.loading_label_data_load.grid_forget()
+            self.data_preview_label.grid_forget()
+
+
+    def show_source_input_fields(self):
+        choice = self.data_source.get()
         self.clear_frame_widgets(self.input_section) 
-        self.connect_load_button.configure(state="normal") 
-        self.loading_label_data_load.configure(text="") 
         self.entries = {} 
+
+        tab = self.tabview.tab("1. Data Connection") 
+        input_section_row = self.input_section.grid_info()['row'] 
+        
+        self.connect_load_button.grid(row=input_section_row + 1, column=0, pady=20, sticky="ew", padx=50)
+        self.loading_label_data_load.grid(row=input_section_row + 2, column=0, pady=(0, 10))
+        self.data_preview_label.grid(row=input_section_row + 3, column=0, pady=20)
+        self.connect_load_button.configure(state="normal") 
 
         if choice == "CSV/Excel File":
             self.build_file_input_fields()
@@ -342,7 +376,7 @@ class DataAnalyzerApp:
             self.connect_load_button.configure(state="disabled")
 
     def build_file_input_fields(self):
-        #Builds input fields for CSV/Excel file selection.
+        """Builds input fields for CSV/Excel file selection."""
         self.input_section.grid_columnconfigure(0, weight=1) 
         self.input_section.grid_columnconfigure(1, weight=0) 
 
@@ -399,7 +433,7 @@ class DataAnalyzerApp:
 
 
     def build_sharepoint_input_fields(self):
-        #Builds input fields for SharePoint connection.
+        """Builds input fields for SharePoint connection."""
         self.input_section.grid_columnconfigure(0, weight=0) 
         self.input_section.grid_columnconfigure(1, weight=1) 
 
@@ -426,7 +460,7 @@ class DataAnalyzerApp:
                      font=("Arial", 12, "italic"), text_color="#A9A9A9", wraplength=450).grid(row=len(fields), column=0, columnspan=2, pady=(10,0), sticky="w")
 
     def browse_file(self):
-        #Opens a file dialog for CSV/Excel file selection.
+        """Opens a file dialog for CSV/Excel file selection."""
         filetypes = [("Excel files", "*.xlsx *.xls"), ("CSV files", "*.csv"), ("All files", "*.*")]
         path = filedialog.askopenfilename(filetypes=filetypes)
         if path:
@@ -439,7 +473,7 @@ class DataAnalyzerApp:
             self.loading_label_data_load.configure(text="File selection cancelled.", text_color="orange")
 
     def load_data(self):
-        #Initiates data loading based on the selected source
+        """Initiates data loading based on the selected source."""
         current_source = self.data_source.get()
         self.loading_label_data_load.configure(text="Loading data...", text_color="yellow")
         self.df = None 
@@ -451,7 +485,7 @@ class DataAnalyzerApp:
                     self.df = backend.load_excel_csv(file_path) 
                     self.loading_label_data_load.configure(text=f"Data loaded successfully from {file_path.split('/')[-1]}!", text_color="#ADFF2F")
                     messagebox.showinfo("Success", f"Data loaded successfully from {file_path.split('/')[-1]}!")
-                    self.tabview.set("2. Summarize Data")
+                    self.tabview.set("2. Summarize Data") 
                 except Exception as e:
                     self.loading_label_data_load.configure(text=f"Error loading file: {e}", text_color="red")
                     messagebox.showerror("Loading Error", f"Failed to load data: {e}")
@@ -469,7 +503,6 @@ class DataAnalyzerApp:
 
             try:
                 self.loading_label_data_load.configure(text="Connecting to database...", text_color="yellow")
-                
                 dummy_sql_query = "SELECT * FROM some_default_table;" 
                 self.df = backend.load_sql_table(
                     dialect=db_config['dialect'],
@@ -482,7 +515,7 @@ class DataAnalyzerApp:
                 )
                 self.loading_label_data_load.configure(text="Data loaded successfully from SQL database!", text_color="#ADFF2F")
                 messagebox.showinfo("Success", "Data loaded successfully from SQL database!")
-                self.tabview.set("2. Summarize Data")
+                self.tabview.set("2. Summarize Data") 
             except Exception as e:
                 self.loading_label_data_load.configure(text=f"Database error: {e}", text_color="red")
                 messagebox.showerror("Database Error", f"Failed to load data from database: {e}")
@@ -505,7 +538,7 @@ class DataAnalyzerApp:
                 )
                 self.loading_label_data_load.configure(text="Data loaded successfully from SharePoint!", text_color="#ADFF2F")
                 messagebox.showinfo("Success", "Data loaded successfully from SharePoint list!")
-                self.tabview.set("2. Summarize Data")
+                self.tabview.set("2. Summarize Data") 
             except Exception as e:
                 self.loading_label_data_load.configure(text=f"SharePoint error: {e}", text_color="red")
                 messagebox.showerror("SharePoint Error", f"Failed to load data from SharePoint: {e}")
@@ -515,11 +548,230 @@ class DataAnalyzerApp:
             messagebox.showwarning("No Source Selected", "Please select a data source type from the dropdown.")
 
     def reset_application(self):
-        #Resets the application to its initial state.
+        """Resets the application to its initial state."""
         response = messagebox.askyesno("Reset Application", "Are you sure you want to reset the application? All loaded data will be cleared.")
         if response:
             self.build_main_layout() 
             messagebox.showinfo("Reset", "Application has been reset.")
+
+
+    def build_summarize_data_tab(self):
+        """Builds the content for the '2. Summarize Data' tab."""
+        tab = self.tabview.tab("2. Summarize Data")
+        self.clear_frame_widgets(tab) 
+
+        # Set column weights: Left (Generate Summary) small, Right (AI Summary Results) very large
+        tab.grid_columnconfigure(0, weight=1)  # Left section (Generate Summary)
+        tab.grid_columnconfigure(1, weight=8)  # Right section (AI Summary Results) - now 8x the space
+        tab.grid_rowconfigure(0, weight=0) 
+        tab.grid_rowconfigure(1, weight=1) 
+
+        ctk.CTkLabel(tab, text="📊 Data Summary & Insights", 
+                     font=("Arial", 28, "bold"), text_color="white").grid(row=0, column=0, columnspan=2, pady=(30, 20), sticky="ew")
+
+        # --- Left Section: Generate Summary ---
+        generate_summary_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        generate_summary_frame.grid(row=1, column=0, sticky="nsew", padx=(30, 15), pady=20)
+        generate_summary_frame.grid_columnconfigure(0, weight=1)
+        generate_summary_frame.grid_rowconfigure((0, 1, 2, 3), weight=0)
+        generate_summary_frame.grid_rowconfigure(4, weight=1) 
+
+        ctk.CTkLabel(generate_summary_frame, text="✨ Generate Summary", 
+                     font=("Arial", 22, "bold"), text_color="white", anchor="w").grid(row=0, column=0, pady=(0, 10), sticky="ew")
+
+        if self.summary_feature_image:
+            ctk.CTkLabel(generate_summary_frame, text="", image=self.summary_feature_image).grid(row=1, column=0, pady=(10, 20))
+        else:
+            ctk.CTkLabel(generate_summary_frame, text="[Summary Feature Image]", font=("Arial", 16), text_color="#A9A9A9").grid(row=1, column=0, pady=(10, 20))
+
+        ctk.CTkLabel(generate_summary_frame, 
+                     text="Our AI will analyze your dataset and provide comprehensive insights about data quality, patterns, and key statistics.", 
+                     font=("Arial", 16), text_color="#D3D3D3", wraplength=180, justify="center").grid(row=2, column=0, pady=(0, 30))
+        
+        self.loading_label_summary = ctk.CTkLabel(generate_summary_frame, text="", font=("Arial", 16), text_color="yellow")
+        self.loading_label_summary.grid(row=3, column=0, pady=(0, 10))
+
+        self.summarize_button = ctk.CTkButton(generate_summary_frame,
+                                              text="Summarize Dataset",
+                                              command=self.trigger_data_summary_generation, 
+                                              font=("Arial", 20, "bold"),
+                                              fg_color="#E066FF", 
+                                              hover_color="#EE82EE", 
+                                              height=55,
+                                              image=self.icon_summarize_dataset, 
+                                              compound="left")
+        self.summarize_button.grid(row=4, column=0, pady=(0, 20), sticky="s") 
+
+        # --- Right Section: AI Summary Results ---
+        ai_summary_results_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10) 
+        ai_summary_results_frame.grid(row=1, column=1, sticky="nsew", padx=(15, 30), pady=20)
+        ai_summary_results_frame.grid_columnconfigure(0, weight=1)
+        ai_summary_results_frame.grid_rowconfigure(0, weight=0)
+        ai_summary_results_frame.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(ai_summary_results_frame, text="🤖 AI Summary Results", 
+                     font=("Arial", 22, "bold"), text_color="white", anchor="w").grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
+        
+        self.summary_output_textbox = ctk.CTkTextbox(ai_summary_results_frame, 
+                                                     font=("Arial", 16), 
+                                                     text_color="#D3D3D3", 
+                                                     wrap="word", 
+                                                     activate_scrollbars=True,
+                                                     fg_color="#4B0082", 
+                                                     scrollbar_button_color="#7B68EE",
+                                                     scrollbar_button_hover_color="#9B7AEF",
+                                                     border_width=1,
+                                                     border_color="#6A5ACD"
+                                                    )
+        self.summary_output_textbox.grid(row=1, column=0, padx=20, pady=(0, 20), sticky="nsew")
+        self.summary_output_textbox.insert("end", "AI summary will appear here.")
+        self.summary_output_textbox.configure(state="disabled") 
+
+    def on_tab_select(self, tab_name):
+        """Callback when a tab button is clicked. Refreshes content based on the selected tab."""
+        if tab_name == "2. Summarize Data":
+            if self.df is None or self.df.empty:
+                self.summary_output_textbox.configure(state="normal")
+                self.summary_output_textbox.delete("1.0", "end")
+                self.summary_output_textbox.insert("end", "No data loaded. Please connect to a data source on the 'Data Connection' tab before generating a summary.")
+                self.summary_output_textbox.configure(state="disabled")
+                self.summarize_button.configure(state="disabled") 
+            else:
+                self.summary_output_textbox.configure(state="normal")
+                self.summary_output_textbox.delete("1.0", "end")
+                self.summary_output_textbox.insert("end", "Click 'Summarize Dataset' to generate an AI summary.")
+                self.summary_output_textbox.configure(state="disabled")
+                self.summarize_button.configure(state="normal") 
+            self.loading_label_summary.configure(text="") 
+
+    def trigger_data_summary_generation(self):
+        """
+        Triggers the generation of the data summary when the "Summarize Dataset" button is clicked.
+        """
+        if self.df is None or self.df.empty:
+            messagebox.showwarning("No Data", "Please load a dataset on the 'Data Connection' tab first.")
+            self.summary_output_textbox.configure(state="normal")
+            self.summary_output_textbox.delete("1.0", "end")
+            self.summary_output_textbox.insert("end", "No data loaded to summarize.")
+            self.summary_output_textbox.configure(state="disabled")
+            return
+
+        self.loading_label_summary.configure(text="Generating summary...", text_color="yellow")
+        self.summary_output_textbox.configure(state="normal")
+        self.summary_output_textbox.delete("1.0", "end")
+        self.summary_output_textbox.insert("end", "Analyzing data... Please wait.")
+        self.summary_output_textbox.configure(state="disabled")
+        self.summarize_button.configure(state="disabled") 
+
+        self.root.after(100, self._generate_and_display_summary_async) 
+
+    def _generate_and_display_summary_async(self):
+        """
+        Internal method to generate the summary (can be called asynchronously).
+        This is where the actual pandas describe/info/value_counts logic goes.
+        """
+        try:
+            summary_report = self.generate_detailed_summary_string(self.df)
+            
+            self.summary_output_textbox.configure(state="normal")
+            self.summary_output_textbox.delete("1.0", "end")
+            self.summary_output_textbox.insert("end", summary_report)
+            self.summary_output_textbox.configure(state="disabled")
+            self.loading_label_summary.configure(text="Summary generated successfully!", text_color="#ADFF2F")
+            self.summarize_button.configure(state="normal")
+
+        except Exception as e:
+            self.summary_output_textbox.configure(state="normal")
+            self.summary_output_textbox.delete("1.0", "end")
+            self.summary_output_textbox.insert("end", f"Error generating summary: {e}")
+            self.summary_output_textbox.configure(state="disabled")
+            self.loading_label_summary.configure(text="Error generating summary.", text_color="red")
+            self.summarize_button.configure(state="normal")
+            messagebox.showerror("Summary Error", f"Failed to generate summary: {e}")
+
+    def generate_detailed_summary_string(self, df):
+        """
+        Generates a comprehensive summary string from the DataFrame.
+        This is the "AI Summary" part, mimicking what an AI might produce.
+        """
+        if df is None or df.empty:
+            return "No data available to generate a summary."
+
+        summary_parts = []
+
+        summary_parts.append("### Dataset Summary Report\n")
+
+        # Data Overview
+        summary_parts.append("#### Data Overview:")
+        summary_parts.append(f"- Total Rows: {df.shape[0]:,}")
+        summary_parts.append(f"- Total Columns: {df.shape[1]}")
+        summary_parts.append(f"- Memory Usage: {df.memory_usage(deep=True).sum() / (1024**2):.2f} MB\n")
+
+        # Data Types
+        summary_parts.append("#### Data Types:")
+        numerical_cols = df.select_dtypes(include=['number']).columns.tolist()
+        text_cols = df.select_dtypes(include=['object', 'string']).columns.tolist()
+        date_cols = df.select_dtypes(include=['datetime']).columns.tolist()
+        boolean_cols = df.select_dtypes(include=['bool']).columns.tolist()
+
+        if numerical_cols:
+            summary_parts.append(f"- Numerics ({len(numerical_cols)} columns): {', '.join(numerical_cols[:5])}{'...' if len(numerical_cols) > 5 else ''}")
+        if text_cols:
+            summary_parts.append(f"- Text ({len(text_cols)} columns): {', '.join(text_cols[:5])}{'...' if len(text_cols) > 5 else ''}")
+        if date_cols:
+            summary_parts.append(f"- Date ({len(date_cols)} columns): {', '.join(date_cols[:5])}{'...' if len(date_cols) > 5 else ''}")
+        if boolean_cols:
+            summary_parts.append(f"- Boolean ({len(boolean_cols)} columns): {', '.join(boolean_cols[:5])}{'...' if len(boolean_cols) > 5 else ''}")
+        summary_parts.append("\n")
+
+        # Missing Values Analysis
+        missing_values = df.isnull().sum()
+        missing_percentage = (df.isnull().sum() / len(df)) * 100
+        missing_info = pd.DataFrame({'Missing Count': missing_values, 'Percentage': missing_percentage})
+        missing_info = missing_info[missing_info['Missing Count'] > 0].sort_values(by='Missing Count', ascending=False)
+
+        summary_parts.append("#### Missing Values Analysis:")
+        if missing_info.empty:
+            summary_parts.append("- All columns: Complete data ✅")
+        else:
+            for index, row in missing_info.iterrows():
+                summary_parts.append(f"- {index}: {int(row['Missing Count'])} missing values ({row['Percentage']:.1f}%)")
+            if len(df.columns) > len(missing_info):
+                summary_parts.append("- All other columns: Complete data ✅")
+        summary_parts.append("\n")
+
+        # Key Statistics (for numerical columns)
+        summary_parts.append("#### Key Statistics:")
+        num_df = df.select_dtypes(include=['number'])
+        if not num_df.empty:
+            for col in num_df.columns:
+                try:
+                    mean_val = num_df[col].mean()
+                    min_val = num_df[col].min()
+                    max_val = num_df[col].max()
+                    
+                    summary_parts.append(f"- **{col}**: Average: {mean_val:,.2f}, Range: {min_val:,.2f} - {max_val:,.2f}")
+                except Exception:
+                    summary_parts.append(f"- **{col}**: (Statistics not calculable or non-numeric data)")
+        else:
+            summary_parts.append("- No numerical columns found for key statistics.")
+        summary_parts.append("\n")
+
+        # Most Common Categories (for categorical columns)
+        summary_parts.append("#### Most Common Categories:")
+        cat_df = df.select_dtypes(include=['object', 'category'])
+        if not cat_df.empty:
+            for col in cat_df.columns:
+                top_value = df[col].mode().iloc[0] if not df[col].mode().empty else "N/A"
+                top_count = df[col].value_counts().max() if not df[col].value_counts().empty else 0
+                top_percentage = (top_count / len(df)) * 100 if len(df) > 0 else 0
+                
+                summary_parts.append(f"- **{col}**: Most common: '{top_value}' ({top_count} occurrences, {top_percentage:.1f}%)")
+        else:
+            summary_parts.append("- No categorical columns found for common categories.")
+        summary_parts.append("\n")
+
+        return "\n".join(summary_parts)
 
 
 # --- Application Entry Point ---
