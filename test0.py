@@ -241,7 +241,7 @@ class DataAnalyzerApp:
 
         self.build_data_connection_tab()
         self.build_summarize_data_tab()
-        self.build_analyze_data_tab() 
+        self.build_analyze_data_tab() # Call to build the analyze data tab
     
     def on_tab_select(self, tab_name):
         """Handles tab selection and ensures correct tab is displayed."""
@@ -317,7 +317,6 @@ class DataAnalyzerApp:
                                                             text="Click 'Submit Source Type' to see connection fields.", 
                                                             font=("Arial", 16), text_color="#A9A9A9")
         self.input_section_placeholder_label.pack(pady=50)
-        
         
         self.connect_load_button = ctk.CTkButton(tab, 
                                                  text="Connect & Load Data",
@@ -727,17 +726,13 @@ class DataAnalyzerApp:
             # Summarize Data Tab
             if self.summarize_button:
                 self.summarize_button.configure(state="normal")
-            # Analyze Data Tab (assuming analyze tab and its buttons are already built or will be)
-            # You might need to add similar checks for self.analyze_button if it's created dynamically
-            analyze_tab = self.tabview.tab("3. Analyze Data")
-            for widget in analyze_tab.winfo_children():
-                if isinstance(widget, ctk.CTkButton) and "analyze" in widget.cget("text").lower(): # General check for analyze buttons
-                    widget.configure(state="normal")
-                elif isinstance(widget, ctk.CTkEntry) or isinstance(widget, ctk.CTkTextbox):
-                    widget.configure(state="normal") # Enable prompt entry
-            if self.analyze_button: # Ensure a specific analyze button is enabled
+            # Analyze Data Tab
+            if self.prompt_entry: # Enable the prompt entry
+                self.prompt_entry.configure(state="normal")
+            if self.result_label: # Enable the result label (for typing, though it's typically read-only)
+                self.result_label.configure(state="normal")
+            if self.analyze_button: # Enable the analyze button
                 self.analyze_button.configure(state="normal")
-
 
             # Enable the 'Go to Analyze Data' button in the Summary tab
             summary_tab = self.tabview.tab("2. Summarize Data")
@@ -761,13 +756,13 @@ class DataAnalyzerApp:
                 self.copy_summary_button.configure(state="disabled")
             
             # Disable elements in Analyze Data Tab
-            analyze_tab = self.tabview.tab("3. Analyze Data")
-            for widget in analyze_tab.winfo_children():
-                if isinstance(widget, ctk.CTkButton) and "analyze" in widget.cget("text").lower():
-                    widget.configure(state="disabled")
-                elif isinstance(widget, ctk.CTkEntry) or isinstance(widget, ctk.CTkTextbox):
-                    widget.configure(state="disabled") # Disable prompt entry
-            if self.analyze_button:
+            if self.prompt_entry: # Disable the prompt entry
+                self.prompt_entry.configure(state="disabled")
+            if self.result_label: # Disable the result label
+                self.result_label.configure(state="disabled")
+                self.result_label.delete("0.0", ctk.END)
+                self.result_label.insert("0.0", "AI analysis results will appear here after you ask a question and click 'Analyze Data'.")
+            if self.analyze_button: # Disable the analyze button
                 self.analyze_button.configure(state="disabled")
 
             # Disable the 'Go to Analyze Data' button in the Summary tab
@@ -893,7 +888,7 @@ class DataAnalyzerApp:
         self.result_label.delete("0.0", ctk.END)
 
         try:
-            
+           
             analysis_result = backend.analyze_data(self.df, prompt) 
             self.result_label.insert("0.0", analysis_result)
             self.loading_label_analysis.configure(text="Analysis complete!", text_color="#ADFF2F")
