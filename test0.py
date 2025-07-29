@@ -47,6 +47,7 @@ class DataAnalyzerApp:
         self.icon_summarize_dataset = self.load_icon("summarize_icon.png", (20, 20)) 
         self.data_connection_tab_icon = self.load_icon("database_icon_large.png", (200, 200))
         self.summary_feature_image = self.load_icon("summary_feature_image.png", (300, 200)) 
+        self.icon_copy = self.load_icon("copy_icon.png", (20, 20)) # New: Copy icon
 
         self.build_main_layout()
 
@@ -232,6 +233,7 @@ class DataAnalyzerApp:
                     if isinstance(child, ctk.CTkButton) and child.cget("text") == text:
                         if icon:
                             child.configure(image=icon, compound="left")
+                        # Attach the on_tab_select command to each tab button
                         child.configure(command=lambda t=text: self.on_tab_select(t))
                         break
 
@@ -239,7 +241,11 @@ class DataAnalyzerApp:
 
         self.build_data_connection_tab()
         self.build_summarize_data_tab()
-        # You'll call build_analyze_data_tab later for the third tab
+        self.build_analyze_data_tab() 
+    
+    def on_tab_select(self, tab_name):
+        """Handles tab selection and ensures correct tab is displayed."""
+        self.tabview.set(tab_name)
 
     def clear_frame_widgets(self, frame):
         """Helper method to destroy all widgets within a given frame."""
@@ -312,6 +318,7 @@ class DataAnalyzerApp:
                                                             font=("Arial", 16), text_color="#A9A9A9")
         self.input_section_placeholder_label.pack(pady=50)
         
+        
         self.connect_load_button = ctk.CTkButton(tab, 
                                                  text="Connect & Load Data",
                                                  command=self.load_data,
@@ -350,11 +357,13 @@ class DataAnalyzerApp:
 
 
     def show_source_input_fields(self):
+        """Displays the appropriate input fields based on the selected data source."""
         choice = self.data_source.get()
         self.clear_frame_widgets(self.input_section) 
         self.entries = {} 
 
         tab = self.tabview.tab("1. Data Connection") 
+        # Find the row where input_section is located to place buttons correctly below it
         input_section_row = self.input_section.grid_info()['row'] 
         
         self.connect_load_button.grid(row=input_section_row + 1, column=0, pady=20, sticky="ew", padx=50)
@@ -485,7 +494,8 @@ class DataAnalyzerApp:
                     self.df = backend.load_excel_csv(file_path) 
                     self.loading_label_data_load.configure(text=f"Data loaded successfully from {file_path.split('/')[-1]}!", text_color="#ADFF2F")
                     messagebox.showinfo("Success", f"Data loaded successfully from {file_path.split('/')[-1]}!")
-                    self.tabview.set("2. Summarize Data") 
+                    self.tabview.set("2. Summarize Data") # Switch to Summary Tab
+                    self.update_summary_tab_state() # Enable summary actions
                 except Exception as e:
                     self.loading_label_data_load.configure(text=f"Error loading file: {e}", text_color="red")
                     messagebox.showerror("Loading Error", f"Failed to load data: {e}")
@@ -515,7 +525,8 @@ class DataAnalyzerApp:
                 )
                 self.loading_label_data_load.configure(text="Data loaded successfully from SQL database!", text_color="#ADFF2F")
                 messagebox.showinfo("Success", "Data loaded successfully from SQL database!")
-                self.tabview.set("2. Summarize Data") 
+                self.tabview.set("2. Summarize Data") # Switch to Summary Tab
+                self.update_summary_tab_state() # Enable summary actions
             except Exception as e:
                 self.loading_label_data_load.configure(text=f"Database error: {e}", text_color="red")
                 messagebox.showerror("Database Error", f"Failed to load data from database: {e}")
@@ -538,7 +549,8 @@ class DataAnalyzerApp:
                 )
                 self.loading_label_data_load.configure(text="Data loaded successfully from SharePoint!", text_color="#ADFF2F")
                 messagebox.showinfo("Success", "Data loaded successfully from SharePoint list!")
-                self.tabview.set("2. Summarize Data") 
+                self.tabview.set("2. Summarize Data") # Switch to Summary Tab
+                self.update_summary_tab_state() # Enable summary actions
             except Exception as e:
                 self.loading_label_data_load.configure(text=f"SharePoint error: {e}", text_color="red")
                 messagebox.showerror("SharePoint Error", f"Failed to load data from SharePoint: {e}")
@@ -553,225 +565,343 @@ class DataAnalyzerApp:
         if response:
             self.build_main_layout() 
             messagebox.showinfo("Reset", "Application has been reset.")
-
-
+    
     def build_summarize_data_tab(self):
         """Builds the content for the '2. Summarize Data' tab."""
         tab = self.tabview.tab("2. Summarize Data")
         self.clear_frame_widgets(tab) 
 
-        # Set column weights: Left (Generate Summary) small, Right (AI Summary Results) very large
-        tab.grid_columnconfigure(0, weight=1)  # Left section (Generate Summary)
-        tab.grid_columnconfigure(1, weight=8)  # Right section (AI Summary Results) - now 8x the space
-        tab.grid_rowconfigure(0, weight=0) 
-        tab.grid_rowconfigure(1, weight=1) 
+        tab.grid_columnconfigure(0, weight=1)  # Left section (Generate Summary) small
+        tab.grid_columnconfigure(1, weight=3)  # Right section (AI Summary Results) larger
+        tab.grid_rowconfigure(0, weight=0) # Title
+        tab.grid_rowconfigure(1, weight=1) # Main content area
 
         ctk.CTkLabel(tab, text="📊 Data Summary & Insights", 
-                     font=("Arial", 28, "bold"), text_color="white").grid(row=0, column=0, columnspan=2, pady=(30, 20), sticky="ew")
+                     font=("Arial", 28, "bold"), text_color="white").grid(row=0, column=0, columnspan=2, pady=(30, 20), sticky="ew", padx=30)
 
-        # --- Left Section: Generate Summary ---
-        generate_summary_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        generate_summary_frame.grid(row=1, column=0, sticky="nsew", padx=(30, 15), pady=20)
-        generate_summary_frame.grid_columnconfigure(0, weight=1)
-        generate_summary_frame.grid_rowconfigure((0, 1, 2, 3), weight=0)
-        generate_summary_frame.grid_rowconfigure(4, weight=1) 
+        # Left Frame: Summary Controls
+        left_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10, border_width=2, border_color="#7B68EE")
+        left_frame.grid(row=1, column=0, sticky="nsew", padx=(30, 15), pady=(0, 30))
+        left_frame.grid_columnconfigure(0, weight=1)
+        left_frame.grid_rowconfigure((0,1,2,3,4,5,6), weight=0) # Adjust as needed
+        left_frame.grid_rowconfigure(7, weight=1) # Spacer row
 
-        ctk.CTkLabel(generate_summary_frame, text="✨ Generate Summary", 
-                     font=("Arial", 22, "bold"), text_color="white", anchor="w").grid(row=0, column=0, pady=(0, 10), sticky="ew")
+        current_row_left = 0
+        ctk.CTkLabel(left_frame, text="Generate Data Summary", font=("Arial", 22, "bold"), text_color="white").grid(row=current_row_left, column=0, pady=(20, 10))
+        current_row_left += 1
 
         if self.summary_feature_image:
-            ctk.CTkLabel(generate_summary_frame, text="", image=self.summary_feature_image).grid(row=1, column=0, pady=(10, 20))
+            ctk.CTkLabel(left_frame, text="", image=self.summary_feature_image).grid(row=current_row_left, column=0, pady=(10, 20))
         else:
-            ctk.CTkLabel(generate_summary_frame, text="[Summary Feature Image]", font=("Arial", 16), text_color="#A9A9A9").grid(row=1, column=0, pady=(10, 20))
-
-        ctk.CTkLabel(generate_summary_frame, 
-                     text="Our AI will analyze your dataset and provide comprehensive insights about data quality, patterns, and key statistics.", 
-                     font=("Arial", 16), text_color="#D3D3D3", wraplength=180, justify="center").grid(row=2, column=0, pady=(0, 30))
+            ctk.CTkLabel(left_frame, text="📈", font=("Arial", 80), text_color="#ADFF2F").grid(row=current_row_left, column=0, pady=(10, 20))
+        current_row_left += 1
         
-        self.loading_label_summary = ctk.CTkLabel(generate_summary_frame, text="", font=("Arial", 16), text_color="yellow")
-        self.loading_label_summary.grid(row=3, column=0, pady=(0, 10))
+        ctk.CTkLabel(left_frame, text="Click below to get an AI-powered summary of your loaded dataset.", 
+                     font=("Arial", 16), text_color="#D3D3D3", wraplength=350, justify="center").grid(row=current_row_left, column=0, padx=20, pady=(0, 20))
+        current_row_left += 1
 
-        self.summarize_button = ctk.CTkButton(generate_summary_frame,
-                                              text="Summarize Dataset",
-                                              command=self.trigger_data_summary_generation, 
+        self.summarize_button = ctk.CTkButton(left_frame,
+                                              text="Summarize Data",
+                                              command=self.summarize_data,
                                               font=("Arial", 20, "bold"),
-                                              fg_color="#E066FF", 
-                                              hover_color="#EE82EE", 
-                                              height=55,
-                                              image=self.icon_summarize_dataset, 
-                                              compound="left")
-        self.summarize_button.grid(row=4, column=0, pady=(0, 20), sticky="s") 
+                                              fg_color="#6A5ACD",
+                                              hover_color="#7B68EE",
+                                              height=50,
+                                              image=self.icon_summarize_dataset,
+                                              compound="left",
+                                              state="disabled" if self.df is None else "normal")
+        self.summarize_button.grid(row=current_row_left, column=0, padx=30, pady=(0, 20), sticky="ew")
+        current_row_left += 1
 
-        # --- Right Section: AI Summary Results ---
-        ai_summary_results_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10) 
-        ai_summary_results_frame.grid(row=1, column=1, sticky="nsew", padx=(15, 30), pady=20)
-        ai_summary_results_frame.grid_columnconfigure(0, weight=1)
-        ai_summary_results_frame.grid_rowconfigure(0, weight=0)
-        ai_summary_results_frame.grid_rowconfigure(1, weight=1)
+        self.loading_label_summary = ctk.CTkLabel(left_frame, text="", font=("Arial", 16), text_color="#ADFF2F")
+        self.loading_label_summary.grid(row=current_row_left, column=0, pady=(0, 10))
+        current_row_left += 1
 
-        ctk.CTkLabel(ai_summary_results_frame, text="🤖 AI Summary Results", 
-                     font=("Arial", 22, "bold"), text_color="white", anchor="w").grid(row=0, column=0, padx=20, pady=(20, 10), sticky="ew")
-        
-        self.summary_output_textbox = ctk.CTkTextbox(ai_summary_results_frame, 
-                                                     font=("Arial", 16), 
-                                                     text_color="#D3D3D3", 
-                                                     wrap="word", 
-                                                     activate_scrollbars=True,
-                                                     fg_color="#4B0082", 
-                                                     scrollbar_button_color="#7B68EE",
-                                                     scrollbar_button_hover_color="#9B7AEF",
+        # Navigation Buttons (Added functionality)
+        ctk.CTkLabel(left_frame, text="Quick Navigation:", font=("Arial", 18, "bold"), text_color="white").grid(row=current_row_left, column=0, pady=(30, 10), sticky="w", padx=30)
+        current_row_left += 1
+
+        # Data Connection Button
+        data_conn_button = ctk.CTkButton(left_frame,
+                                         text="Go to Data Connection",
+                                         command=lambda: self.on_tab_select("1. Data Connection"),
+                                         font=("Arial", 16),
+                                         fg_color="#5D40A4",
+                                         hover_color="#7B68EE",
+                                         height=40,
+                                         image=self.icon_data_connection,
+                                         compound="left")
+        data_conn_button.grid(row=current_row_left, column=0, padx=30, pady=(5, 5), sticky="ew")
+        current_row_left += 1
+
+        # Analyze Data Button
+        analyze_data_button = ctk.CTkButton(left_frame,
+                                            text="Go to Analyze Data",
+                                            command=lambda: self.on_tab_select("3. Analyze Data"),
+                                            font=("Arial", 16),
+                                            fg_color="#5D40A4",
+                                            hover_color="#7B68EE",
+                                            height=40,
+                                            image=self.icon_analyze_data,
+                                            compound="left",
+                                            state="disabled" if self.df is None else "normal")
+        analyze_data_button.grid(row=current_row_left, column=0, padx=30, pady=(5, 20), sticky="ew")
+        current_row_left += 1
+
+        # Right Frame: Summary Output
+        right_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10, border_width=2, border_color="#7B68EE")
+        right_frame.grid(row=1, column=1, sticky="nsew", padx=(15, 30), pady=(0, 30))
+        right_frame.grid_columnconfigure(0, weight=1)
+        right_frame.grid_rowconfigure(0, weight=0) # Title
+        right_frame.grid_rowconfigure(1, weight=1) # Textbox
+        right_frame.grid_rowconfigure(2, weight=0) # Copy button
+
+        ctk.CTkLabel(right_frame, text="AI Summary Results", font=("Arial", 22, "bold"), text_color="white").grid(row=0, column=0, pady=(20, 10))
+
+        self.summary_output_textbox = ctk.CTkTextbox(right_frame,
+                                                     wrap="word",
+                                                     font=("Arial", 16),
+                                                     text_color="white",
+                                                     fg_color="#4B0082",
                                                      border_width=1,
-                                                     border_color="#6A5ACD"
-                                                    )
-        self.summary_output_textbox.grid(row=1, column=0, padx=20, pady=(0, 20), sticky="nsew")
-        self.summary_output_textbox.insert("end", "AI summary will appear here.")
-        self.summary_output_textbox.configure(state="disabled") 
+                                                     border_color="#7B68EE",
+                                                     corner_radius=5)
+        self.summary_output_textbox.insert("0.0", "Your AI-powered data summary will appear here after loading data and clicking 'Summarize Data'.")
+        self.summary_output_textbox.configure(state="disabled") # Make it read-only initially
+        self.summary_output_textbox.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="nsew")
 
-    def on_tab_select(self, tab_name):
-        """Callback when a tab button is clicked. Refreshes content based on the selected tab."""
-        if tab_name == "2. Summarize Data":
-            if self.df is None or self.df.empty:
-                self.summary_output_textbox.configure(state="normal")
-                self.summary_output_textbox.delete("1.0", "end")
-                self.summary_output_textbox.insert("end", "No data loaded. Please connect to a data source on the 'Data Connection' tab before generating a summary.")
-                self.summary_output_textbox.configure(state="disabled")
-                self.summarize_button.configure(state="disabled") 
-            else:
-                self.summary_output_textbox.configure(state="normal")
-                self.summary_output_textbox.delete("1.0", "end")
-                self.summary_output_textbox.insert("end", "Click 'Summarize Dataset' to generate an AI summary.")
-                self.summary_output_textbox.configure(state="disabled")
-                self.summarize_button.configure(state="normal") 
-            self.loading_label_summary.configure(text="") 
+        # Copy Summary Button
+        self.copy_summary_button = ctk.CTkButton(right_frame,
+                                                  text="Copy Summary",
+                                                  command=self.copy_summary_to_clipboard,
+                                                  font=("Arial", 16, "bold"),
+                                                  fg_color="#5D40A4",
+                                                  hover_color="#7B68EE",
+                                                  height=40,
+                                                  image=self.icon_copy, # Use the new copy icon
+                                                  compound="left",
+                                                  state="disabled") # Disabled until summary is generated
+        self.copy_summary_button.grid(row=2, column=0, padx=20, pady=(0, 20), sticky="e")
+        
+        self.update_summary_tab_state()
 
-    def trigger_data_summary_generation(self):
-        """
-        Triggers the generation of the data summary when the "Summarize Dataset" button is clicked.
-        """
-        if self.df is None or self.df.empty:
-            messagebox.showwarning("No Data", "Please load a dataset on the 'Data Connection' tab first.")
-            self.summary_output_textbox.configure(state="normal")
-            self.summary_output_textbox.delete("1.0", "end")
-            self.summary_output_textbox.insert("end", "No data loaded to summarize.")
-            self.summary_output_textbox.configure(state="disabled")
+
+    def summarize_data(self):
+        """Triggers the data summarization process using the backend."""
+        if self.df is None:
+            messagebox.showwarning("No Data", "Please load data first in the 'Data Connection' tab.")
+            self.loading_label_summary.configure(text="No data loaded.", text_color="orange")
             return
 
         self.loading_label_summary.configure(text="Generating summary...", text_color="yellow")
         self.summary_output_textbox.configure(state="normal")
-        self.summary_output_textbox.delete("1.0", "end")
-        self.summary_output_textbox.insert("end", "Analyzing data... Please wait.")
-        self.summary_output_textbox.configure(state="disabled")
-        self.summarize_button.configure(state="disabled") 
+        self.summary_output_textbox.delete("0.0", ctk.END)
+        self.copy_summary_button.configure(state="disabled")
 
-        self.root.after(100, self._generate_and_display_summary_async) 
-
-    def _generate_and_display_summary_async(self):
-        """
-        Internal method to generate the summary (can be called asynchronously).
-        This is where the actual pandas describe/info/value_counts logic goes.
-        """
         try:
-            summary_report = self.generate_detailed_summary_string(self.df)
-            
-            self.summary_output_textbox.configure(state="normal")
-            self.summary_output_textbox.delete("1.0", "end")
-            self.summary_output_textbox.insert("end", summary_report)
-            self.summary_output_textbox.configure(state="disabled")
+            summary = backend.summarize_dataframe(self.df)
+            self.summary_output_textbox.insert("0.0", summary)
             self.loading_label_summary.configure(text="Summary generated successfully!", text_color="#ADFF2F")
-            self.summarize_button.configure(state="normal")
-
+            self.copy_summary_button.configure(state="normal") # Enable copy button
         except Exception as e:
-            self.summary_output_textbox.configure(state="normal")
-            self.summary_output_textbox.delete("1.0", "end")
-            self.summary_output_textbox.insert("end", f"Error generating summary: {e}")
-            self.summary_output_textbox.configure(state="disabled")
-            self.loading_label_summary.configure(text="Error generating summary.", text_color="red")
-            self.summarize_button.configure(state="normal")
-            messagebox.showerror("Summary Error", f"Failed to generate summary: {e}")
+            self.summary_output_textbox.insert("0.0", f"Error generating summary: {e}")
+            self.loading_label_summary.configure(text=f"Error: {e}", text_color="red")
+        finally:
+            self.summary_output_textbox.configure(state="disabled") # Keep it read-only
+            
+        self.update_summary_tab_state() # Ensure correct state after summarization
 
-    def generate_detailed_summary_string(self, df):
-        """
-        Generates a comprehensive summary string from the DataFrame.
-        This is the "AI Summary" part, mimicking what an AI might produce.
-        """
-        if df is None or df.empty:
-            return "No data available to generate a summary."
-
-        summary_parts = []
-
-        summary_parts.append("### Dataset Summary Report\n")
-
-        # Data Overview
-        summary_parts.append("#### Data Overview:")
-        summary_parts.append(f"- Total Rows: {df.shape[0]:,}")
-        summary_parts.append(f"- Total Columns: {df.shape[1]}")
-        summary_parts.append(f"- Memory Usage: {df.memory_usage(deep=True).sum() / (1024**2):.2f} MB\n")
-
-        # Data Types
-        summary_parts.append("#### Data Types:")
-        numerical_cols = df.select_dtypes(include=['number']).columns.tolist()
-        text_cols = df.select_dtypes(include=['object', 'string']).columns.tolist()
-        date_cols = df.select_dtypes(include=['datetime']).columns.tolist()
-        boolean_cols = df.select_dtypes(include=['bool']).columns.tolist()
-
-        if numerical_cols:
-            summary_parts.append(f"- Numerics ({len(numerical_cols)} columns): {', '.join(numerical_cols[:5])}{'...' if len(numerical_cols) > 5 else ''}")
-        if text_cols:
-            summary_parts.append(f"- Text ({len(text_cols)} columns): {', '.join(text_cols[:5])}{'...' if len(text_cols) > 5 else ''}")
-        if date_cols:
-            summary_parts.append(f"- Date ({len(date_cols)} columns): {', '.join(date_cols[:5])}{'...' if len(date_cols) > 5 else ''}")
-        if boolean_cols:
-            summary_parts.append(f"- Boolean ({len(boolean_cols)} columns): {', '.join(boolean_cols[:5])}{'...' if len(boolean_cols) > 5 else ''}")
-        summary_parts.append("\n")
-
-        # Missing Values Analysis
-        missing_values = df.isnull().sum()
-        missing_percentage = (df.isnull().sum() / len(df)) * 100
-        missing_info = pd.DataFrame({'Missing Count': missing_values, 'Percentage': missing_percentage})
-        missing_info = missing_info[missing_info['Missing Count'] > 0].sort_values(by='Missing Count', ascending=False)
-
-        summary_parts.append("#### Missing Values Analysis:")
-        if missing_info.empty:
-            summary_parts.append("- All columns: Complete data ✅")
+    def copy_summary_to_clipboard(self):
+        """Copies the content of the summary output textbox to the clipboard."""
+        summary_text = self.summary_output_textbox.get("0.0", ctk.END).strip()
+        if summary_text and summary_text != "Your AI-powered data summary will appear here after loading data and clicking 'Summarize Data'.":
+            self.root.clipboard_clear()
+            self.root.clipboard_append(summary_text)
+            messagebox.showinfo("Copied", "Summary copied to clipboard!")
         else:
-            for index, row in missing_info.iterrows():
-                summary_parts.append(f"- {index}: {int(row['Missing Count'])} missing values ({row['Percentage']:.1f}%)")
-            if len(df.columns) > len(missing_info):
-                summary_parts.append("- All other columns: Complete data ✅")
-        summary_parts.append("\n")
+            messagebox.showwarning("No Summary", "There is no summary to copy yet.")
 
-        # Key Statistics (for numerical columns)
-        summary_parts.append("#### Key Statistics:")
-        num_df = df.select_dtypes(include=['number'])
-        if not num_df.empty:
-            for col in num_df.columns:
-                try:
-                    mean_val = num_df[col].mean()
-                    min_val = num_df[col].min()
-                    max_val = num_df[col].max()
-                    
-                    summary_parts.append(f"- **{col}**: Average: {mean_val:,.2f}, Range: {min_val:,.2f} - {max_val:,.2f}")
-                except Exception:
-                    summary_parts.append(f"- **{col}**: (Statistics not calculable or non-numeric data)")
+    def update_summary_tab_state(self):
+        """Updates the state of buttons and elements in the 'Summarize Data' and 'Analyze Data' tabs based on whether data is loaded."""
+        if self.df is not None:
+            # Summarize Data Tab
+            if self.summarize_button:
+                self.summarize_button.configure(state="normal")
+            # Analyze Data Tab (assuming analyze tab and its buttons are already built or will be)
+            # You might need to add similar checks for self.analyze_button if it's created dynamically
+            analyze_tab = self.tabview.tab("3. Analyze Data")
+            for widget in analyze_tab.winfo_children():
+                if isinstance(widget, ctk.CTkButton) and "analyze" in widget.cget("text").lower(): # General check for analyze buttons
+                    widget.configure(state="normal")
+                elif isinstance(widget, ctk.CTkEntry) or isinstance(widget, ctk.CTkTextbox):
+                    widget.configure(state="normal") # Enable prompt entry
+            if self.analyze_button: # Ensure a specific analyze button is enabled
+                self.analyze_button.configure(state="normal")
+
+
+            # Enable the 'Go to Analyze Data' button in the Summary tab
+            summary_tab = self.tabview.tab("2. Summarize Data")
+            for widget in summary_tab.winfo_children():
+                if isinstance(widget, ctk.CTkFrame): # Look inside the left frame
+                    for child_widget in widget.winfo_children():
+                        if isinstance(child_widget, ctk.CTkButton) and "Go to Analyze Data" in child_widget.cget("text"):
+                            child_widget.configure(state="normal")
+                            break
+            
         else:
-            summary_parts.append("- No numerical columns found for key statistics.")
-        summary_parts.append("\n")
+            # Data not loaded
+            if self.summarize_button:
+                self.summarize_button.configure(state="disabled")
+            if self.summary_output_textbox:
+                self.summary_output_textbox.configure(state="normal") # Temporarily enable to clear
+                self.summary_output_textbox.delete("0.0", ctk.END)
+                self.summary_output_textbox.insert("0.0", "Your AI-powered data summary will appear here after loading data and clicking 'Summarize Data'.")
+                self.summary_output_textbox.configure(state="disabled")
+            if self.copy_summary_button:
+                self.copy_summary_button.configure(state="disabled")
+            
+            # Disable elements in Analyze Data Tab
+            analyze_tab = self.tabview.tab("3. Analyze Data")
+            for widget in analyze_tab.winfo_children():
+                if isinstance(widget, ctk.CTkButton) and "analyze" in widget.cget("text").lower():
+                    widget.configure(state="disabled")
+                elif isinstance(widget, ctk.CTkEntry) or isinstance(widget, ctk.CTkTextbox):
+                    widget.configure(state="disabled") # Disable prompt entry
+            if self.analyze_button:
+                self.analyze_button.configure(state="disabled")
 
-        # Most Common Categories (for categorical columns)
-        summary_parts.append("#### Most Common Categories:")
-        cat_df = df.select_dtypes(include=['object', 'category'])
-        if not cat_df.empty:
-            for col in cat_df.columns:
-                top_value = df[col].mode().iloc[0] if not df[col].mode().empty else "N/A"
-                top_count = df[col].value_counts().max() if not df[col].value_counts().empty else 0
-                top_percentage = (top_count / len(df)) * 100 if len(df) > 0 else 0
-                
-                summary_parts.append(f"- **{col}**: Most common: '{top_value}' ({top_count} occurrences, {top_percentage:.1f}%)")
-        else:
-            summary_parts.append("- No categorical columns found for common categories.")
-        summary_parts.append("\n")
+            # Disable the 'Go to Analyze Data' button in the Summary tab
+            summary_tab = self.tabview.tab("2. Summarize Data")
+            for widget in summary_tab.winfo_children():
+                if isinstance(widget, ctk.CTkFrame): # Look inside the left frame
+                    for child_widget in widget.winfo_children():
+                        if isinstance(child_widget, ctk.CTkButton) and "Go to Analyze Data" in child_widget.cget("text"):
+                            child_widget.configure(state="disabled")
+                            break
 
-        return "\n".join(summary_parts)
+
+    def build_analyze_data_tab(self):
+        """Builds the content for the '3. Analyze Data' tab."""
+        tab = self.tabview.tab("3. Analyze Data")
+        self.clear_frame_widgets(tab)
+
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(0, weight=0)
+        tab.grid_rowconfigure(1, weight=1)
+        tab.grid_rowconfigure(2, weight=0)
+        tab.grid_rowconfigure(3, weight=0)
+
+        ctk.CTkLabel(tab, text="🧠 AI Data Analysis",
+                     font=("Arial", 28, "bold"), text_color="white").grid(row=0, column=0, pady=(30, 20), sticky="ew", padx=30)
+
+        # Main content frame for analysis
+        analysis_content_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10, border_width=2, border_color="#7B68EE")
+        analysis_content_frame.grid(row=1, column=0, sticky="nsew", padx=30, pady=(0, 30))
+        analysis_content_frame.grid_columnconfigure(0, weight=1)
+        analysis_content_frame.grid_rowconfigure(0, weight=0) # Prompt label
+        analysis_content_frame.grid_rowconfigure(1, weight=0) # Prompt entry
+        analysis_content_frame.grid_rowconfigure(2, weight=0) # Analyze button
+        analysis_content_frame.grid_rowconfigure(3, weight=0) # Loading label
+        analysis_content_frame.grid_rowconfigure(4, weight=1) # Result label
+
+        ctk.CTkLabel(analysis_content_frame, text="Ask your data a question:",
+                     font=("Arial", 18, "bold"), text_color="#D3D3D3").grid(row=0, column=0, pady=(20, 10), sticky="w", padx=20)
+
+        self.prompt_entry = ctk.CTkEntry(analysis_content_frame,
+                                         placeholder_text="e.g., What is the average sales per region?",
+                                         font=("Arial", 16),
+                                         width=600,
+                                         height=40,
+                                         fg_color="#4B0082",
+                                         text_color="white",
+                                         border_color="#7B68EE",
+                                         border_width=1,
+                                         state="disabled") # Disabled initially
+        self.prompt_entry.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
+
+        self.analyze_button = ctk.CTkButton(analysis_content_frame,
+                                            text="Analyze Data",
+                                            command=self.analyze_data,
+                                            font=("Arial", 20, "bold"),
+                                            fg_color="#6A5ACD",
+                                            hover_color="#7B68EE",
+                                            height=50,
+                                            state="disabled") # Disabled initially
+        self.analyze_button.grid(row=2, column=0, padx=20, pady=(10, 20), sticky="ew")
+
+        self.loading_label_analysis = ctk.CTkLabel(analysis_content_frame, text="", font=("Arial", 16), text_color="#ADFF2F")
+        self.loading_label_analysis.grid(row=3, column=0, pady=(0, 10))
+
+        self.result_label = ctk.CTkTextbox(analysis_content_frame,
+                                            wrap="word",
+                                            font=("Arial", 16),
+                                            text_color="white",
+                                            fg_color="#4B0082",
+                                            border_width=1,
+                                            border_color="#7B68EE",
+                                            corner_radius=5,
+                                            state="disabled") # Disabled initially
+        self.result_label.insert("0.0", "AI analysis results will appear here after you ask a question and click 'Analyze Data'.")
+        self.result_label.grid(row=4, column=0, padx=20, pady=(0, 20), sticky="nsew")
+
+        # Navigation Buttons (Added functionality)
+        nav_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        nav_frame.grid(row=2, column=0, pady=(0, 20), sticky="ew", padx=30)
+        nav_frame.grid_columnconfigure(0, weight=1)
+        nav_frame.grid_columnconfigure(1, weight=1)
+
+        data_conn_button = ctk.CTkButton(nav_frame,
+                                         text="Go to Data Connection",
+                                         command=lambda: self.on_tab_select("1. Data Connection"),
+                                         font=("Arial", 16),
+                                         fg_color="#5D40A4",
+                                         hover_color="#7B68EE",
+                                         height=40,
+                                         image=self.icon_data_connection,
+                                         compound="left")
+        data_conn_button.grid(row=0, column=0, padx=(0, 10), sticky="ew")
+
+        summarize_data_button = ctk.CTkButton(nav_frame,
+                                              text="Go to Summarize Data",
+                                              command=lambda: self.on_tab_select("2. Summarize Data"),
+                                              font=("Arial", 16),
+                                              fg_color="#5D40A4",
+                                              hover_color="#7B68EE",
+                                              height=40,
+                                              image=self.icon_summarize_data,
+                                              compound="left")
+        summarize_data_button.grid(row=0, column=1, padx=(10, 0), sticky="ew")
+
+        # Ensure initial state is correct for the analyze tab
+        self.update_summary_tab_state()
+
+    def analyze_data(self):
+        """Triggers the data analysis process using the backend."""
+        if self.df is None:
+            messagebox.showwarning("No Data", "Please load data first in the 'Data Connection' tab.")
+            self.loading_label_analysis.configure(text="No data loaded.", text_color="orange")
+            return
+
+        prompt = self.prompt_entry.get().strip()
+        if not prompt:
+            messagebox.showwarning("No Query", "Please enter a question to analyze your data.")
+            self.loading_label_analysis.configure(text="Please enter a question.", text_color="orange")
+            return
+
+        self.loading_label_analysis.configure(text="Analyzing data...", text_color="yellow")
+        self.result_label.configure(state="normal")
+        self.result_label.delete("0.0", ctk.END)
+
+        try:
+            
+            analysis_result = backend.analyze_data(self.df, prompt) 
+            self.result_label.insert("0.0", analysis_result)
+            self.loading_label_analysis.configure(text="Analysis complete!", text_color="#ADFF2F")
+        except Exception as e:
+            self.result_label.insert("0.0", f"Error during analysis: {e}")
+            self.loading_label_analysis.configure(text=f"Error: {e}", text_color="red")
+        finally:
+            self.result_label.configure(state="disabled") # Keep it read-only
 
 
 # --- Application Entry Point ---
