@@ -1,11 +1,9 @@
-# app.py
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 import pandas as pd
-import os # Import os for path manipulation
-
-import backend # This will now contain the DataAnalyzer class
+import os 
+import backend
 
 class DataAnalyzerApp:
     def __init__(self, root):
@@ -18,10 +16,12 @@ class DataAnalyzerApp:
         ctk.set_default_color_theme("blue")
 
         # Initialize the DataAnalyzer from backend
-        self.data_analyzer = backend.DataAnalyzer() # <--- NEW: Instantiate DataAnalyzer
-        self.df = None # app.py will still hold a reference to the loaded DataFrame
-        self.current_plot_images = [] # Store references to plot images to prevent garbage collection
+        self.data_analyzer = backend.DataAnalyzer() 
+        self.df = None 
 
+      
+        self.current_plot_images = [] 
+        self.plot_display_frame = None 
         self.entries = {}
         self.file_path = ctk.StringVar(value="No file selected")
         self.data_source = ctk.StringVar(value="--- Select Source ---")
@@ -35,15 +35,13 @@ class DataAnalyzerApp:
         self.summarize_button = None
         self.analyze_button = None
         self.summary_output_textbox = None
-        self.result_label = None # This is the analysis output textbox
+        self.result_label = None 
         self.prompt_entry = None
         self.input_section = None
         self.input_section_placeholder_label = None
         self.data_preview_label = None
         self.copy_analysis_button = None
-        self.copy_summary_button = None # Already existed, just confirming
-
-        self.plot_display_frame = None # <--- NEW: Frame for displaying plots
+        self.copy_summary_button = None 
 
         # Load icons for tabs at initialization
         self.icon_data_connection = self.load_icon("data_connection_icon.png", (24, 24))
@@ -63,21 +61,20 @@ class DataAnalyzerApp:
     def load_icon(self, path, size):
         """Helper to load and resize images for icons."""
         try:
-            img = Image.open(path).resize(size, Image.Resampling.LANCZOS) # Use LANCZOS for better quality
+            img = Image.open(path).resize(size, Image.Resampling.LANCZOS)
             return ctk.CTkImage(light_image=img, dark_image=img, size=size)
         except FileNotFoundError:
             print(f"Warning: {path} not found. Icon will not be displayed.")
             return None
 
     def build_main_layout(self):
-        # Reset internal state variables
-        # self.df = None # This will now be managed by DataAnalyzer
-        self.data_analyzer = backend.DataAnalyzer() # Re-initialize DataAnalyzer on reset
-        self.df = None # Reset the local df reference too
+       
+        self.data_analyzer = backend.DataAnalyzer() 
+        self.df = None
         self.entries = {}
         self.file_path.set("No file selected")
         self.data_source.set("--- Select Source ---")
-        self.current_plot_images = [] # Clear plot image references on reset
+        self.current_plot_images = [] 
 
         for widget in self.root.winfo_children():
             widget.destroy()
@@ -496,14 +493,15 @@ class DataAnalyzerApp:
         """Initiates data loading based on the selected source using DataAnalyzer."""
         current_source = self.data_source.get()
         self.loading_label_data_load.configure(text="Loading data...", text_color="yellow")
-        self.df = None # Reset local df reference
+        self.df = None
 
         try:
             if current_source == "CSV/Excel File":
                 file_path = self.file_path.get()
                 if not file_path or file_path == "No file selected":
                     raise ValueError("Please select a file first.")
-                self.df = self.data_analyzer.load_data("file", file_path=file_path) # <--- UPDATED CALL
+                
+                self.df = self.data_analyzer.load_data("file", file_path=file_path) 
                 self.loading_label_data_load.configure(text=f"Data loaded successfully from {os.path.basename(file_path)}!", text_color="#ADFF2F")
                 messagebox.showinfo("Success", f"Data loaded successfully from {os.path.basename(file_path)}!")
 
@@ -511,10 +509,8 @@ class DataAnalyzerApp:
                 db_config = {key: self.entries[key].get() for key in ["dialect", "host", "port", "database_name", "username", "password"]}
                 if not all(db_config.values()):
                     raise ValueError("Please fill all database fields.")
-                # Note: The SQL query is now handled within backend.load_sql_table or assumed default
-                # You might want to add a UI element for the user to input a custom SQL query if needed.
                 dummy_sql_query = "SELECT * FROM some_default_table;" # Placeholder, if no specific query input in GUI
-                self.df = self.data_analyzer.load_data( # <--- UPDATED CALL
+                self.df = self.data_analyzer.load_data( 
                     "sql",
                     dialect=db_config['dialect'],
                     username=db_config['username'],
@@ -531,7 +527,7 @@ class DataAnalyzerApp:
                 sp_config = {key: self.entries[key].get() for key in ["site_url", "list_name", "client_id", "client_secret"]}
                 if not all(sp_config.values()):
                     raise ValueError("Please fill all SharePoint fields.")
-                self.df = self.data_analyzer.load_data( # <--- UPDATED CALL
+                self.df = self.data_analyzer.load_data( 
                     "sharepoint",
                     site_url=sp_config['site_url'],
                     list_name=sp_config['list_name'],
@@ -551,15 +547,15 @@ class DataAnalyzerApp:
             else:
                 self.data_preview_label.configure(text="No data preview available or DataFrame is empty.", text_color="#A9A9A9")
 
-            self.tabview.set("2. Summarize Data") # Switch to Summary Tab
-            self.update_summary_tab_state() # Enable summary actions
+            self.tabview.set("2. Summarize Data") 
+            self.update_summary_tab_state() 
 
         except Exception as e:
-            self.df = None # Ensure df is None on error
+            self.df = None
             self.loading_label_data_load.configure(text=f"Error: {e}", text_color="red")
             messagebox.showerror("Loading Error", f"Failed to load data: {e}")
             self.data_preview_label.configure(text="Failed to load data. Please check inputs.", text_color="red")
-            self.update_summary_tab_state() # Update state even on failure
+            self.update_summary_tab_state() 
 
     def reset_application(self):
         """Resets the application to its initial state."""
@@ -707,7 +703,8 @@ class DataAnalyzerApp:
         self.summary_output_textbox.configure(state="normal")
         self.summary_output_textbox.delete("0.0", ctk.END)
         self.copy_summary_button.configure(state="disabled")
-        self.clear_frame_widgets(self.plot_display_frame) # Clear existing plots
+        self.clear_frame_widgets(self.plot_display_frame) 
+        self.current_plot_images = [] 
 
         try:
             # Call the get_data_summary method from the DataAnalyzer instance
@@ -717,7 +714,7 @@ class DataAnalyzerApp:
             self.copy_summary_button.configure(state="normal")
 
             if plot_paths:
-                self.display_plots(plot_paths) # <--- NEW: Call method to display plots
+                self.display_plots(plot_paths) 
             else:
                 ctk.CTkLabel(self.plot_display_frame, text="No relevant plots generated for this dataset.",
                              font=("Arial", 16), text_color="#A9A9A9").pack(pady=20)
@@ -734,7 +731,7 @@ class DataAnalyzerApp:
     def display_plots(self, plot_paths):
         """Displays generated plot images in the plot_display_frame."""
         self.clear_frame_widgets(self.plot_display_frame)
-        self.current_plot_images = [] # Clear previous references
+        self.current_plot_images = [] 
 
         if not plot_paths:
             ctk.CTkLabel(self.plot_display_frame, text="No plots to display.", font=("Arial", 16), text_color="#A9A9A9").pack(pady=20)
@@ -743,21 +740,26 @@ class DataAnalyzerApp:
         for i, plot_path in enumerate(plot_paths):
             try:
                 img = Image.open(plot_path)
-                # Resize image to fit within the frame, maintaining aspect ratio
-                max_width = self.plot_display_frame.winfo_width() - 40 # Account for padding
-                max_height = 400 # Max height for individual plot, adjust as needed
+               
+                self.plot_display_frame.update_idletasks() 
+                max_width = self.plot_display_frame.winfo_width() - 40 
+                max_height = 400 
+
                 img_width, img_height = img.size
 
-                aspect_ratio = img_width / img_height
-                if img_width > max_width:
-                    img_width = max_width
-                    img_height = int(img_width / aspect_ratio)
-                if img_height > max_height:
-                    img_height = max_height
-                    img_width = int(img_height * aspect_ratio)
+                
+                if img_width > max_width or img_height > max_height:
+                    width_ratio = max_width / img_width
+                    height_ratio = max_height / img_height
+                    scale_factor = min(width_ratio, height_ratio)
+                    new_width = int(img_width * scale_factor)
+                    new_height = int(img_height * scale_factor)
+                else:
+                    new_width = img_width
+                    new_height = img_height
 
-                img_resized = img.resize((img_width, img_height), Image.Resampling.LANCZOS)
-                ctk_img = ctk.CTkImage(light_image=img_resized, dark_image=img_resized, size=(img_width, img_height))
+                img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                ctk_img = ctk.CTkImage(light_image=img_resized, dark_image=img_resized, size=(new_width, new_height))
                 self.current_plot_images.append(ctk_img) # Keep a reference
 
                 plot_label = ctk.CTkLabel(self.plot_display_frame, text="", image=ctk_img)
@@ -797,8 +799,9 @@ class DataAnalyzerApp:
 
     def update_summary_tab_state(self):
         """Updates the state of buttons and elements in the 'Summarize Data' and 'Analyze Data' tabs based on whether data is loaded."""
+        
         data_loaded = self.data_analyzer.df is not None and not self.data_analyzer.df.empty
-        self.df = self.data_analyzer.df # Keep local df reference updated
+        self.df = self.data_analyzer.df # Keep local df reference updated for convenience
 
         if data_loaded:
             if self.summarize_button:
@@ -806,7 +809,7 @@ class DataAnalyzerApp:
             if self.prompt_entry:
                 self.prompt_entry.configure(state="normal")
             if self.result_label:
-                self.result_label.configure(state="normal") # Enable to allow display
+                self.result_label.configure(state="normal") 
             if self.analyze_button:
                 self.analyze_button.configure(state="normal")
             if self.copy_analysis_button:
@@ -964,7 +967,7 @@ class DataAnalyzerApp:
         self.update_summary_tab_state()
 
     def analyze_data(self):
-        """Triggers the data analysis process using the DataAnalyzer's Summarizer."""
+        """Triggers the data analysis process using the DataAnalyzer's analyse_dataframe."""
         if self.df is None:
             messagebox.showwarning("No Data", "Please load data first in the 'Data Connection' tab.")
             self.loading_label_analysis.configure(text="No data loaded.", text_color="orange")
@@ -982,15 +985,11 @@ class DataAnalyzerApp:
         self.copy_analysis_button.configure(state="disabled")
 
         try:
-            # Call the analyse_data_with_llm method from the Summarizer instance within DataAnalyzer
-            # Ensure df is not None before calling
-            if self.data_analyzer.summarizer:
-                analysis_result = self.data_analyzer.summarizer.analyse_data_with_llm(prompt) # <--- UPDATED CALL
-                self.result_label.insert("0.0", analysis_result)
-                self.loading_label_analysis.configure(text="Analysis complete!", text_color="#ADFF2F")
-                self.copy_analysis_button.configure(state="normal")
-            else:
-                raise ValueError("Data analyzer not initialized. Please load data first.")
+            # Calls the LLM-powered analysis method from DataAnalyzer instance
+            analysis_result = self.data_analyzer.analyse_dataframe(self.df, prompt) # <--- UPDATED CALL
+            self.result_label.insert("0.0", analysis_result)
+            self.loading_label_analysis.configure(text="Analysis complete!", text_color="#ADFF2F")
+            self.copy_analysis_button.configure(state="normal")
         except Exception as e:
             self.result_label.insert("0.0", f"Error during analysis: {e}")
             self.loading_label_analysis.configure(text=f"Error: {e}", text_color="red")
