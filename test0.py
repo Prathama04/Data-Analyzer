@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, UnidentifiedImageError # Import UnidentifiedImageError
 import pandas as pd
 import os # Import os for path manipulation
 
@@ -71,10 +71,9 @@ class DataAnalyzerApp:
         try:
             img = Image.open(path).resize(size, Image.Resampling.LANCZOS)
             return ctk.CTkImage(light_image=img, dark_image=img, size=size)
-        except FileNotFoundError:
-            print(f"Warning: {path} not found. Icon will not be displayed.")
-            # Create a simple placeholder image if the file is not found
-            # This helps prevent errors if the icon files are missing
+        except (FileNotFoundError, UnidentifiedImageError) as e: # Catch both errors
+            print(f"Warning: {path} not found or cannot be identified ({e}). Icon will not be displayed, using placeholder.")
+            # Create a simple placeholder image if the file is not found or corrupted
             placeholder_img = Image.new('RGB', size, color = 'grey')
             return ctk.CTkImage(light_image=placeholder_img, dark_image=placeholder_img, size=size)
 
@@ -154,36 +153,41 @@ class DataAnalyzerApp:
                      font=("Arial", 25, "bold"), text_color="white").grid(row=current_row, column=0, columnspan=2, padx=20, pady=(40, 10), sticky="w")
         current_row += 1
 
-        def create_feature_item(parent, icon_path, title, description, row_num):
+        def create_feature_item(parent, icon_ctk_image, title, description, row_num): # Changed icon_path to icon_ctk_image
             item_frame = ctk.CTkFrame(parent, fg_color="transparent")
             item_frame.grid(row=row_num, column=0, columnspan=2, sticky="ew", padx=20, pady=8)
             item_frame.grid_columnconfigure(0, weight=0)
             item_frame.grid_columnconfigure(1, weight=1)
 
-            try:
-                icon_img = Image.open(icon_path).resize((30, 30), Image.Resampling.LANCZOS)
-                icon_ctk = ctk.CTkImage(light_image=icon_img, dark_image=icon_img, size=(30, 30))
-                ctk.CTkLabel(item_frame, text="", image=icon_ctk).grid(row=0, column=0, rowspan=2, padx=(0, 10), sticky="nw")
-            except FileNotFoundError:
+            # Use the pre-loaded CTkImage directly
+            if icon_ctk_image:
+                ctk.CTkLabel(item_frame, text="", image=icon_ctk_image).grid(row=0, column=0, rowspan=2, padx=(0, 10), sticky="nw")
+            else:
                 ctk.CTkLabel(item_frame, text="•", font=("Arial", 25), text_color="#87CEEB").grid(row=0, column=0, rowspan=2, padx=(0, 10), sticky="nw")
-                print(f"Warning: {icon_path} not found. Showing text placeholder.")
+                # Removed the print statement here as load_icon already prints a warning
 
             ctk.CTkLabel(item_frame, text=title, font=("Arial", 20, "bold"), text_color="white", anchor="w").grid(row=0, column=1, sticky="ew")
             ctk.CTkLabel(item_frame, text=description, font=("Arial", 14), text_color="#A9A9A9", wraplength=180, justify="left", anchor="w").grid(row=1, column=1, sticky="ew")
 
             return item_frame
 
-        create_feature_item(self.sidebar_frame, "icon_multi_source.png",
+        create_feature_item(self.sidebar_frame, self.load_icon("icon_multi_source.png", (30, 30)), # Pass CTkImage
                             "Multi-Source Connection", "Excel, SQL, SharePoint", current_row)
         current_row += 1
 
-        create_feature_item(self.sidebar_frame, "icon_summarization.png",
+        create_feature_item(self.sidebar_frame, self.load_icon("icon_summarization.png", (30, 30)), # Pass CTkImage
                             "Smart Summarization", "Instant data insights", current_row)
         current_row += 1
 
-        create_feature_item(self.sidebar_frame, "icon_ai_analysis.png",
+        create_feature_item(self.sidebar_frame, self.load_icon("icon_ai_analysis.png", (30, 30)), # Pass CTkImage
                             "AI Analysis", "Natural language queries", current_row)
         current_row += 1
+
+        # Added new feature item for Multilingual Support
+        create_feature_item(self.sidebar_frame, self.icon_multilingual, # Pass the pre-loaded CTkImage
+                            "Multilingual Support", "Input/output in multiple languages", current_row)
+        current_row += 1
+
 
         self.sidebar_frame.grid_rowconfigure(current_row, weight=1)
         current_row += 1
@@ -970,8 +974,8 @@ class DataAnalyzerApp:
         self.clear_frame_widgets(tab)
 
         tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6), weight=0)
-        tab.grid_rowconfigure(7, weight=1) # Make space for future content
+        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7), weight=0) # Adjusted row weights
+        tab.grid_rowconfigure(8, weight=1) # Make space for future content
 
         current_row = 0
 
@@ -1038,6 +1042,34 @@ class DataAnalyzerApp:
         self.output_language_optionmenu.grid(row=1, column=0, columnspan=2, pady=(0, 20), padx=20, sticky="ew")
         current_row += 1
 
+        # Action Buttons for Multilingual Tab
+        action_buttons_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        action_buttons_frame.grid(row=current_row, column=0, padx=50, pady=(10, 10), sticky="ew")
+        action_buttons_frame.grid_columnconfigure(0, weight=1)
+        action_buttons_frame.grid_columnconfigure(1, weight=1)
+
+        # Placeholder for Translate button
+        self.translate_button = ctk.CTkButton(action_buttons_frame,
+                                              text="Translate (Future Feature)",
+                                              command=lambda: messagebox.showinfo("Feature Coming Soon", "Translation functionality will be implemented in a future update!"),
+                                              font=("Arial", 16, "bold"),
+                                              fg_color="#5D40A4",
+                                              hover_color="#7B68EE",
+                                              height=40,
+                                              state="disabled") # Disabled until actual integration
+        self.translate_button.grid(row=0, column=0, padx=(0, 10), sticky="ew")
+
+        # Reset Languages button
+        self.reset_languages_button = ctk.CTkButton(action_buttons_frame,
+                                                    text="Reset Languages",
+                                                    command=self._reset_languages,
+                                                    font=("Arial", 16, "bold"),
+                                                    fg_color="#8B0000",
+                                                    hover_color="#DC143C",
+                                                    height=40)
+        self.reset_languages_button.grid(row=0, column=1, padx=(10, 0), sticky="ew")
+        current_row += 1
+
         ctk.CTkLabel(tab, text="Note: Actual translation functionality will be implemented in future updates.",
                      font=("Arial", 14, "italic"), text_color="#A9A9A9", wraplength=800, justify="center").grid(row=current_row, column=0, pady=(20, 30), padx=50)
         current_row += 1
@@ -1072,6 +1104,12 @@ class DataAnalyzerApp:
         current_row += 1
 
         tab.grid_rowconfigure(current_row, weight=1) # Push content to top
+
+    def _reset_languages(self):
+        """Resets the input and output language selections to English."""
+        self.input_language_var.set("English")
+        self.output_language_var.set("English")
+        messagebox.showinfo("Languages Reset", "Input and Output languages have been reset to English.")
 
 
     def analyze_data(self):
