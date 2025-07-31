@@ -16,15 +16,20 @@ class DataAnalyzerApp:
         ctk.set_default_color_theme("blue")
 
         # Initialize the DataAnalyzer from backend
-        self.data_analyzer = backend.DataAnalyzer() 
-        self.df = None 
+        self.data_analyzer = backend.DataAnalyzer()
+        self.df = None
 
-      
-        self.current_plot_images = [] 
-        self.plot_display_frame = None 
+        # Attributes for plot display
+        self.current_plot_images = []
+        self.plot_display_frame = None
+
         self.entries = {}
         self.file_path = ctk.StringVar(value="No file selected")
         self.data_source = ctk.StringVar(value="--- Select Source ---")
+
+        # New StringVars for multilingual support
+        self.input_language_var = ctk.StringVar(value="English")
+        self.output_language_var = ctk.StringVar(value="English")
 
         self.tabview = None
         self.loading_label_data_load = None
@@ -35,18 +40,19 @@ class DataAnalyzerApp:
         self.summarize_button = None
         self.analyze_button = None
         self.summary_output_textbox = None
-        self.result_label = None 
+        self.result_label = None
         self.prompt_entry = None
         self.input_section = None
         self.input_section_placeholder_label = None
         self.data_preview_label = None
         self.copy_analysis_button = None
-        self.copy_summary_button = None 
+        self.copy_summary_button = None
 
         # Load icons for tabs at initialization
         self.icon_data_connection = self.load_icon("data_connection_icon.png", (24, 24))
         self.icon_summarize_data = self.load_icon("summarize_data_icon.png", (24, 24))
         self.icon_analyze_data = self.load_icon("analyze_data_icon.png", (24, 24))
+        self.icon_multilingual = self.load_icon("multilingual_icon.png", (24, 24)) # New icon for multilingual tab
         self.icon_file_upload = self.load_icon("upload_icon.png", (20, 20))
         self.icon_database = self.load_icon("database_icon.png", (20, 20))
         self.icon_sharepoint = self.load_icon("sharepoint_icon.png", (20, 20))
@@ -65,16 +71,20 @@ class DataAnalyzerApp:
             return ctk.CTkImage(light_image=img, dark_image=img, size=size)
         except FileNotFoundError:
             print(f"Warning: {path} not found. Icon will not be displayed.")
-            return None
+            # Create a simple placeholder image if the file is not found
+            # This helps prevent errors if the icon files are missing
+            placeholder_img = Image.new('RGB', size, color = 'grey')
+            return ctk.CTkImage(light_image=placeholder_img, dark_image=placeholder_img, size=size)
+
 
     def build_main_layout(self):
-       
-        self.data_analyzer = backend.DataAnalyzer() 
+        # Reset internal state variables
+        self.data_analyzer = backend.DataAnalyzer()
         self.df = None
         self.entries = {}
         self.file_path.set("No file selected")
         self.data_source.set("--- Select Source ---")
-        self.current_plot_images = [] 
+        self.current_plot_images = []
 
         for widget in self.root.winfo_children():
             widget.destroy()
@@ -173,6 +183,12 @@ class DataAnalyzerApp:
                             "AI Analysis", "Natural language queries", current_row)
         current_row += 1
 
+        # Added new feature item for Multilingual Support
+        create_feature_item(self.sidebar_frame, "multilingual_icon.png",
+                            "Multilingual Support", "Input/output in multiple languages", current_row)
+        current_row += 1
+
+
         self.sidebar_frame.grid_rowconfigure(current_row, weight=1)
         current_row += 1
 
@@ -232,7 +248,8 @@ class DataAnalyzerApp:
         tab_data = [
             ("1. Data Connection", self.icon_data_connection),
             ("2. Summarize Data", self.icon_summarize_data),
-            ("3. Analyze Data", self.icon_analyze_data)
+            ("3. Analyze Data", self.icon_analyze_data),
+            ("4. Multilingual Support", self.icon_multilingual) # Added new tab
         ]
 
         for text, icon in tab_data:
@@ -242,7 +259,6 @@ class DataAnalyzerApp:
                     if isinstance(child, ctk.CTkButton) and child.cget("text") == text:
                         if icon:
                             child.configure(image=icon, compound="left")
-                        # Attach the on_tab_select command to each tab button
                         child.configure(command=lambda t=text: self.on_tab_select(t))
                         break
 
@@ -251,7 +267,9 @@ class DataAnalyzerApp:
         self.build_data_connection_tab()
         self.build_summarize_data_tab()
         self.build_analyze_data_tab()
-        self.update_summary_tab_state() # Ensure initial state is correct
+        self.build_multilingual_support_tab() # Call to build the new tab
+        # Defer the state update to ensure all widgets are fully rendered
+        self.root.after(100, self.update_summary_tab_state)
 
     def on_tab_select(self, tab_name):
         """Handles tab selection and ensures correct tab is displayed."""
@@ -482,7 +500,7 @@ class DataAnalyzerApp:
         path = filedialog.askopenfilename(filetypes=filetypes)
         if path:
             self.file_path.set(path)
-            self.loading_label_data_load.configure(text=f"Selected: {os.path.basename(path)}", text_color="#ADFF2F") # Use os.path.basename
+            self.loading_label_data_load.configure(text=f"Selected: {os.path.basename(path)}", text_color="#ADFF2F")
             if 'file_path_entry' in self.entries:
                 self.entries['file_path_entry'].delete(0, ctk.END)
                 self.entries['file_path_entry'].insert(0, path)
@@ -500,8 +518,7 @@ class DataAnalyzerApp:
                 file_path = self.file_path.get()
                 if not file_path or file_path == "No file selected":
                     raise ValueError("Please select a file first.")
-                
-                self.df = self.data_analyzer.load_data("file", file_path=file_path) 
+                self.df = self.data_analyzer.load_data("file", file_path=file_path)
                 self.loading_label_data_load.configure(text=f"Data loaded successfully from {os.path.basename(file_path)}!", text_color="#ADFF2F")
                 messagebox.showinfo("Success", f"Data loaded successfully from {os.path.basename(file_path)}!")
 
@@ -509,8 +526,8 @@ class DataAnalyzerApp:
                 db_config = {key: self.entries[key].get() for key in ["dialect", "host", "port", "database_name", "username", "password"]}
                 if not all(db_config.values()):
                     raise ValueError("Please fill all database fields.")
-                dummy_sql_query = "SELECT * FROM some_default_table;" # Placeholder, if no specific query input in GUI
-                self.df = self.data_analyzer.load_data( 
+                dummy_sql_query = "SELECT * FROM some_default_table;"
+                self.df = self.data_analyzer.load_data(
                     "sql",
                     dialect=db_config['dialect'],
                     username=db_config['username'],
@@ -527,7 +544,7 @@ class DataAnalyzerApp:
                 sp_config = {key: self.entries[key].get() for key in ["site_url", "list_name", "client_id", "client_secret"]}
                 if not all(sp_config.values()):
                     raise ValueError("Please fill all SharePoint fields.")
-                self.df = self.data_analyzer.load_data( 
+                self.df = self.data_analyzer.load_data(
                     "sharepoint",
                     site_url=sp_config['site_url'],
                     list_name=sp_config['list_name'],
@@ -547,15 +564,15 @@ class DataAnalyzerApp:
             else:
                 self.data_preview_label.configure(text="No data preview available or DataFrame is empty.", text_color="#A9A9A9")
 
-            self.tabview.set("2. Summarize Data") 
-            self.update_summary_tab_state() 
+            self.tabview.set("2. Summarize Data")
+            self.update_summary_tab_state()
 
         except Exception as e:
             self.df = None
             self.loading_label_data_load.configure(text=f"Error: {e}", text_color="red")
             messagebox.showerror("Loading Error", f"Failed to load data: {e}")
             self.data_preview_label.configure(text="Failed to load data. Please check inputs.", text_color="red")
-            self.update_summary_tab_state() 
+            self.update_summary_tab_state()
 
     def reset_application(self):
         """Resets the application to its initial state."""
@@ -647,10 +664,10 @@ class DataAnalyzerApp:
         right_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10, border_width=2, border_color="#7B68EE")
         right_frame.grid(row=1, column=1, sticky="nsew", padx=(15, 30), pady=(0, 30))
         right_frame.grid_columnconfigure(0, weight=1)
-        right_frame.grid_rowconfigure(0, weight=0) # Title
-        right_frame.grid_rowconfigure(1, weight=2) # Textbox (more space)
-        right_frame.grid_rowconfigure(2, weight=0) # Copy button
-        right_frame.grid_rowconfigure(3, weight=3) # Plot display frame (more space)
+        right_frame.grid_rowconfigure(0, weight=0)
+        right_frame.grid_rowconfigure(1, weight=2)
+        right_frame.grid_rowconfigure(2, weight=0)
+        right_frame.grid_rowconfigure(3, weight=3)
 
         ctk.CTkLabel(right_frame, text="AI Summary Results", font=("Arial", 22, "bold"), text_color="white").grid(row=0, column=0, pady=(20, 10))
 
@@ -678,7 +695,6 @@ class DataAnalyzerApp:
                                                   state="disabled")
         self.copy_summary_button.grid(row=2, column=0, padx=20, pady=(0, 20), sticky="e")
 
-        # Frame for displaying plots
         self.plot_display_frame = ctk.CTkScrollableFrame(right_frame,
                                                          fg_color="#4B0082",
                                                          border_width=1,
@@ -690,11 +706,9 @@ class DataAnalyzerApp:
                      font=("Arial", 16), text_color="#A9A9A9").pack(pady=50)
 
 
-        self.update_summary_tab_state()
-
     def summarize_data(self):
         """Triggers the data summarization process using the DataAnalyzer."""
-        if self.df is None: # Use local df reference to check if data is loaded
+        if self.df is None:
             messagebox.showwarning("No Data", "Please load data first in the 'Data Connection' tab.")
             self.loading_label_summary.configure(text="No data loaded.", text_color="orange")
             return
@@ -703,18 +717,17 @@ class DataAnalyzerApp:
         self.summary_output_textbox.configure(state="normal")
         self.summary_output_textbox.delete("0.0", ctk.END)
         self.copy_summary_button.configure(state="disabled")
-        self.clear_frame_widgets(self.plot_display_frame) 
-        self.current_plot_images = [] 
+        self.clear_frame_widgets(self.plot_display_frame)
+        self.current_plot_images = []
 
         try:
-            # Call the get_data_summary method from the DataAnalyzer instance
-            summary_text, plot_paths = self.data_analyzer.get_data_summary() # <--- UPDATED CALL
+            summary_text, plot_paths = self.data_analyzer.get_data_summary()
             self.summary_output_textbox.insert("0.0", summary_text)
             self.loading_label_summary.configure(text="Summary generated successfully!", text_color="#ADFF2F")
             self.copy_summary_button.configure(state="normal")
 
             if plot_paths:
-                self.display_plots(plot_paths) 
+                self.display_plots(plot_paths)
             else:
                 ctk.CTkLabel(self.plot_display_frame, text="No relevant plots generated for this dataset.",
                              font=("Arial", 16), text_color="#A9A9A9").pack(pady=20)
@@ -731,7 +744,7 @@ class DataAnalyzerApp:
     def display_plots(self, plot_paths):
         """Displays generated plot images in the plot_display_frame."""
         self.clear_frame_widgets(self.plot_display_frame)
-        self.current_plot_images = [] 
+        self.current_plot_images = []
 
         if not plot_paths:
             ctk.CTkLabel(self.plot_display_frame, text="No plots to display.", font=("Arial", 16), text_color="#A9A9A9").pack(pady=20)
@@ -740,14 +753,12 @@ class DataAnalyzerApp:
         for i, plot_path in enumerate(plot_paths):
             try:
                 img = Image.open(plot_path)
-               
-                self.plot_display_frame.update_idletasks() 
-                max_width = self.plot_display_frame.winfo_width() - 40 
-                max_height = 400 
+                self.plot_display_frame.update_idletasks()
+                max_width = self.plot_display_frame.winfo_width() - 40
+                max_height = 400
 
                 img_width, img_height = img.size
 
-                
                 if img_width > max_width or img_height > max_height:
                     width_ratio = max_width / img_width
                     height_ratio = max_height / img_height
@@ -760,11 +771,10 @@ class DataAnalyzerApp:
 
                 img_resized = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
                 ctk_img = ctk.CTkImage(light_image=img_resized, dark_image=img_resized, size=(new_width, new_height))
-                self.current_plot_images.append(ctk_img) # Keep a reference
+                self.current_plot_images.append(ctk_img)
 
                 plot_label = ctk.CTkLabel(self.plot_display_frame, text="", image=ctk_img)
                 plot_label.pack(pady=10)
-                # Add plot title if available, or just an index
                 ctk.CTkLabel(self.plot_display_frame, text=f"Plot {i+1}: {os.path.basename(plot_path)}",
                              font=("Arial", 14, "bold"), text_color="#D3D3D3").pack(pady=(0, 5))
 
@@ -799,65 +809,58 @@ class DataAnalyzerApp:
 
     def update_summary_tab_state(self):
         """Updates the state of buttons and elements in the 'Summarize Data' and 'Analyze Data' tabs based on whether data is loaded."""
-        
         data_loaded = self.data_analyzer.df is not None and not self.data_analyzer.df.empty
-        self.df = self.data_analyzer.df # Keep local df reference updated for convenience
+        self.df = self.data_analyzer.df
 
-        if data_loaded:
-            if self.summarize_button:
-                self.summarize_button.configure(state="normal")
-            if self.prompt_entry:
-                self.prompt_entry.configure(state="normal")
-            if self.result_label:
-                self.result_label.configure(state="normal") 
-            if self.analyze_button:
-                self.analyze_button.configure(state="normal")
-            if self.copy_analysis_button:
-                self.copy_analysis_button.configure(state="normal")
+        # Check if widgets exist and are valid before configuring them
+        if self.summarize_button and self.summarize_button.winfo_exists():
+            self.summarize_button.configure(state="normal" if data_loaded else "disabled")
 
-            summary_tab = self.tabview.tab("2. Summarize Data")
-            for widget in summary_tab.winfo_children():
-                if isinstance(widget, ctk.CTkFrame):
-                    for child_widget in widget.winfo_children():
-                        if isinstance(child_widget, ctk.CTkButton) and "Go to Analyze Data" in child_widget.cget("text"):
-                            child_widget.configure(state="normal")
-                            break
+        if self.prompt_entry and self.prompt_entry.winfo_exists():
+            self.prompt_entry.configure(state="normal" if data_loaded else "disabled")
+            if not data_loaded:
+                self.prompt_entry.delete(0, ctk.END)
 
-        else:
-            if self.summarize_button:
-                self.summarize_button.configure(state="disabled")
-            if self.summary_output_textbox:
-                self.summary_output_textbox.configure(state="normal")
+        if self.result_label and self.result_label.winfo_exists():
+            self.result_label.configure(state="normal") # Temporarily enable to clear/insert text
+            if not data_loaded:
+                self.result_label.delete("0.0", ctk.END)
+                self.result_label.insert("0.0", "AI analysis results will appear here after you ask a question and click 'Analyze Data'.")
+            self.result_label.configure(state="disabled")
+
+        if self.analyze_button and self.analyze_button.winfo_exists():
+            self.analyze_button.configure(state="normal" if data_loaded else "disabled")
+
+        if self.copy_analysis_button and self.copy_analysis_button.winfo_exists():
+            self.copy_analysis_button.configure(state="normal" if data_loaded else "disabled")
+
+        if self.summary_output_textbox and self.summary_output_textbox.winfo_exists():
+            self.summary_output_textbox.configure(state="normal")
+            if not data_loaded:
                 self.summary_output_textbox.delete("0.0", ctk.END)
                 self.summary_output_textbox.insert("0.0", "Your AI-powered data summary will appear here after loading data and clicking 'Summarize Data'.")
-                self.summary_output_textbox.configure(state="disabled")
-            if self.copy_summary_button:
-                self.copy_summary_button.configure(state="disabled")
-            # Clear plots when data is not loaded or reset
+            self.summary_output_textbox.configure(state="disabled")
+
+        if self.copy_summary_button and self.copy_summary_button.winfo_exists():
+            is_summary_placeholder = self.summary_output_textbox.get("0.0", ctk.END).strip() == "Your AI-powered data summary will appear here after loading data and clicking 'Summarize Data'."
+            self.copy_summary_button.configure(state="normal" if data_loaded and not is_summary_placeholder else "disabled")
+
+
+        # Clear plots when data is not loaded or reset
+        if not data_loaded and self.plot_display_frame and self.plot_display_frame.winfo_exists():
             self.clear_frame_widgets(self.plot_display_frame)
             ctk.CTkLabel(self.plot_display_frame, text="Visualizations will appear here.",
                          font=("Arial", 16), text_color="#A9A9A9").pack(pady=50)
-            self.current_plot_images = [] # Clear references
+            self.current_plot_images = []
 
-            if self.prompt_entry:
-                self.prompt_entry.configure(state="disabled")
-                self.prompt_entry.delete(0, ctk.END)
-            if self.result_label:
-                self.result_label.configure(state="normal")
-                self.result_label.delete("0.0", ctk.END)
-                self.result_label.insert("0.0", "AI analysis results will appear here after you ask a question and click 'Analyze Data'.")
-                self.result_label.configure(state="disabled")
-            if self.analyze_button:
-                self.analyze_button.configure(state="disabled")
-            if self.copy_analysis_button:
-                self.copy_analysis_button.configure(state="disabled")
-
-            summary_tab = self.tabview.tab("2. Summarize Data")
+        # Update "Go to Analyze Data" button state in Summarize tab
+        summary_tab = self.tabview.tab("2. Summarize Data")
+        if summary_tab and summary_tab.winfo_exists():
             for widget in summary_tab.winfo_children():
-                if isinstance(widget, ctk.CTkFrame):
+                if isinstance(widget, ctk.CTkFrame) and widget.winfo_exists():
                     for child_widget in widget.winfo_children():
-                        if isinstance(child_widget, ctk.CTkButton) and "Go to Analyze Data" in child_widget.cget("text"):
-                            child_widget.configure(state="disabled")
+                        if isinstance(child_widget, ctk.CTkButton) and "Go to Analyze Data" in child_widget.cget("text") and child_widget.winfo_exists():
+                            child_widget.configure(state="normal" if data_loaded else "disabled")
                             break
 
 
@@ -964,7 +967,150 @@ class DataAnalyzerApp:
                                               compound="left")
         summarize_data_button.grid(row=0, column=1, padx=(10, 0), sticky="ew")
 
-        self.update_summary_tab_state()
+
+    def build_multilingual_support_tab(self):
+        """Builds the content for the '4. Multilingual Support' tab."""
+        tab = self.tabview.tab("4. Multilingual Support")
+        self.clear_frame_widgets(tab)
+
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7), weight=0) # Adjusted row weights
+        tab.grid_rowconfigure(8, weight=1) # Make space for future content
+
+        current_row = 0
+
+        ctk.CTkLabel(tab, text="🌐 Multilingual Support",
+                     font=("Arial", 28, "bold"), text_color="white").grid(row=current_row, column=0, pady=(30, 20), sticky="ew", padx=30)
+        current_row += 1
+
+        ctk.CTkLabel(tab, text="Add translations for your data to support users in different languages effortlessly.",
+                     font=("Arial", 16), text_color="#D3D3D3", wraplength=800, justify="center").grid(row=current_row, column=0, pady=(0, 30), padx=50)
+        current_row += 1
+
+        # Input Language Selection
+        input_lang_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10, border_width=2, border_color="#7B68EE")
+        input_lang_frame.grid(row=current_row, column=0, padx=50, pady=(10, 20), sticky="ew")
+        input_lang_frame.grid_columnconfigure(0, weight=1)
+        input_lang_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(input_lang_frame, text="Select Input Query Language:",
+                     font=("Arial", 18, "bold"), text_color="white").grid(row=0, column=0, columnspan=2, pady=(15, 10), padx=20, sticky="w")
+
+        languages = ["English", "Spanish", "French", "German", "Chinese", "Japanese", "Hindi", "Arabic"] # Example languages
+        self.input_language_optionmenu = ctk.CTkOptionMenu(input_lang_frame,
+                                                            values=languages,
+                                                            variable=self.input_language_var,
+                                                            font=("Arial", 16),
+                                                            dropdown_font=("Arial", 16),
+                                                            width=250,
+                                                            height=40,
+                                                            fg_color="#6A5ACD",
+                                                            button_color="#5D40A4",
+                                                            button_hover_color="#7B68EE",
+                                                            text_color="white",
+                                                            dropdown_fg_color="#4B0082",
+                                                            dropdown_hover_color="#5D40A4",
+                                                            dropdown_text_color="white"
+                                                           )
+        self.input_language_optionmenu.grid(row=1, column=0, columnspan=2, pady=(0, 20), padx=20, sticky="ew")
+        current_row += 1
+
+        # Output Language Selection
+        output_lang_frame = ctk.CTkFrame(tab, fg_color="#3A2B5B", corner_radius=10, border_width=2, border_color="#7B68EE")
+        output_lang_frame.grid(row=current_row, column=0, padx=50, pady=(10, 20), sticky="ew")
+        output_lang_frame.grid_columnconfigure(0, weight=1)
+        output_lang_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(output_lang_frame, text="Select Output Display Language:",
+                     font=("Arial", 18, "bold"), text_color="white").grid(row=0, column=0, columnspan=2, pady=(15, 10), padx=20, sticky="w")
+
+        self.output_language_optionmenu = ctk.CTkOptionMenu(output_lang_frame,
+                                                             values=languages, # Same language list for output
+                                                             variable=self.output_language_var,
+                                                             font=("Arial", 16),
+                                                             dropdown_font=("Arial", 16),
+                                                             width=250,
+                                                             height=40,
+                                                             fg_color="#6A5ACD",
+                                                             button_color="#5D40A4",
+                                                             button_hover_color="#7B68EE",
+                                                             text_color="white",
+                                                             dropdown_fg_color="#4B0082",
+                                                             dropdown_hover_color="#5D40A4",
+                                                             dropdown_text_color="white"
+                                                            )
+        self.output_language_optionmenu.grid(row=1, column=0, columnspan=2, pady=(0, 20), padx=20, sticky="ew")
+        current_row += 1
+
+        # Action Buttons for Multilingual Tab
+        action_buttons_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        action_buttons_frame.grid(row=current_row, column=0, padx=50, pady=(10, 10), sticky="ew")
+        action_buttons_frame.grid_columnconfigure(0, weight=1)
+        action_buttons_frame.grid_columnconfigure(1, weight=1)
+
+        # Placeholder for Translate button
+        self.translate_button = ctk.CTkButton(action_buttons_frame,
+                                              text="Translate (Future Feature)",
+                                              command=lambda: messagebox.showinfo("Feature Coming Soon", "Translation functionality will be implemented in a future update!"),
+                                              font=("Arial", 16, "bold"),
+                                              fg_color="#5D40A4",
+                                              hover_color="#7B68EE",
+                                              height=40,
+                                              state="disabled") # Disabled until actual integration
+        self.translate_button.grid(row=0, column=0, padx=(0, 10), sticky="ew")
+
+        # Reset Languages button
+        self.reset_languages_button = ctk.CTkButton(action_buttons_frame,
+                                                    text="Reset Languages",
+                                                    command=self._reset_languages,
+                                                    font=("Arial", 16, "bold"),
+                                                    fg_color="#8B0000",
+                                                    hover_color="#DC143C",
+                                                    height=40)
+        self.reset_languages_button.grid(row=0, column=1, padx=(10, 0), sticky="ew")
+        current_row += 1
+
+        ctk.CTkLabel(tab, text="Note: Actual translation functionality will be implemented in future updates.",
+                     font=("Arial", 14, "italic"), text_color="#A9A9A9", wraplength=800, justify="center").grid(row=current_row, column=0, pady=(20, 30), padx=50)
+        current_row += 1
+
+        # Quick Navigation buttons (similar to other tabs)
+        nav_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        nav_frame.grid(row=current_row, column=0, pady=(0, 20), sticky="ew", padx=50)
+        nav_frame.grid_columnconfigure(0, weight=1)
+        nav_frame.grid_columnconfigure(1, weight=1)
+
+        data_conn_button = ctk.CTkButton(nav_frame,
+                                         text="Go to Data Connection",
+                                         command=lambda: self.on_tab_select("1. Data Connection"),
+                                         font=("Arial", 16),
+                                         fg_color="#5D40A4",
+                                         hover_color="#7B68EE",
+                                         height=40,
+                                         image=self.icon_data_connection,
+                                         compound="left")
+        data_conn_button.grid(row=0, column=0, padx=(0, 10), sticky="ew")
+
+        summarize_data_button = ctk.CTkButton(nav_frame,
+                                              text="Go to Summarize Data",
+                                              command=lambda: self.on_tab_select("2. Summarize Data"),
+                                              font=("Arial", 16),
+                                              fg_color="#5D40A4",
+                                              hover_color="#7B68EE",
+                                              height=40,
+                                              image=self.icon_summarize_data,
+                                              compound="left")
+        summarize_data_button.grid(row=0, column=1, padx=(10, 0), sticky="ew")
+        current_row += 1
+
+        tab.grid_rowconfigure(current_row, weight=1) # Push content to top
+
+    def _reset_languages(self):
+        """Resets the input and output language selections to English."""
+        self.input_language_var.set("English")
+        self.output_language_var.set("English")
+        messagebox.showinfo("Languages Reset", "Input and Output languages have been reset to English.")
+
 
     def analyze_data(self):
         """Triggers the data analysis process using the DataAnalyzer's analyse_dataframe."""
@@ -979,22 +1125,25 @@ class DataAnalyzerApp:
             self.loading_label_analysis.configure(text="Please enter a question.", text_color="orange")
             return
 
-        self.loading_label_analysis.configure(text="Analyzing data...", text_color="yellow")
+        self.loading_label_analysis.configure(text="Analyzing data... Please wait, this may take a moment.", text_color="yellow")
         self.result_label.configure(state="normal")
         self.result_label.delete("0.0", ctk.END)
         self.copy_analysis_button.configure(state="disabled")
+        self.analyze_button.configure(state="disabled")
+
+        self.root.update_idletasks()
 
         try:
-            # Calls the LLM-powered analysis method from DataAnalyzer instance
-            analysis_result = self.data_analyzer.analyse_dataframe(self.df, prompt) # <--- UPDATED CALL
+            analysis_result = self.data_analyzer.analyse_dataframe(self.df, prompt)
             self.result_label.insert("0.0", analysis_result)
-            self.loading_label_analysis.configure(text="Analysis complete!", text_color="#ADFF2F")
+            self.loading_label_analysis.configure(text="Analysis complete! ✅", text_color="#ADFF2F")
             self.copy_analysis_button.configure(state="normal")
         except Exception as e:
             self.result_label.insert("0.0", f"Error during analysis: {e}")
             self.loading_label_analysis.configure(text=f"Error: {e}", text_color="red")
         finally:
             self.result_label.configure(state="disabled")
+            self.analyze_button.configure(state="normal")
 
 
 # --- Application Entry Point ---
