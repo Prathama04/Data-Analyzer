@@ -2,7 +2,9 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 import pandas as pd
-import os 
+import os # Import os for path manipulation
+
+# Import your updated backend file
 import backend
 
 class DataAnalyzerApp:
@@ -182,12 +184,6 @@ class DataAnalyzerApp:
         create_feature_item(self.sidebar_frame, "icon_ai_analysis.png",
                             "AI Analysis", "Natural language queries", current_row)
         current_row += 1
-
-        # Added new feature item for Multilingual Support
-        create_feature_item(self.sidebar_frame, "multilingual_icon.png",
-                            "Multilingual Support", "Input/output in multiple languages", current_row)
-        current_row += 1
-
 
         self.sidebar_frame.grid_rowconfigure(current_row, weight=1)
         current_row += 1
@@ -974,8 +970,8 @@ class DataAnalyzerApp:
         self.clear_frame_widgets(tab)
 
         tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6, 7), weight=0) # Adjusted row weights
-        tab.grid_rowconfigure(8, weight=1) # Make space for future content
+        tab.grid_rowconfigure((0, 1, 2, 3, 4, 5, 6), weight=0)
+        tab.grid_rowconfigure(7, weight=1) # Make space for future content
 
         current_row = 0
 
@@ -1042,34 +1038,6 @@ class DataAnalyzerApp:
         self.output_language_optionmenu.grid(row=1, column=0, columnspan=2, pady=(0, 20), padx=20, sticky="ew")
         current_row += 1
 
-        # Action Buttons for Multilingual Tab
-        action_buttons_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        action_buttons_frame.grid(row=current_row, column=0, padx=50, pady=(10, 10), sticky="ew")
-        action_buttons_frame.grid_columnconfigure(0, weight=1)
-        action_buttons_frame.grid_columnconfigure(1, weight=1)
-
-        # Placeholder for Translate button
-        self.translate_button = ctk.CTkButton(action_buttons_frame,
-                                              text="Translate (Future Feature)",
-                                              command=lambda: messagebox.showinfo("Feature Coming Soon", "Translation functionality will be implemented in a future update!"),
-                                              font=("Arial", 16, "bold"),
-                                              fg_color="#5D40A4",
-                                              hover_color="#7B68EE",
-                                              height=40,
-                                              state="disabled") # Disabled until actual integration
-        self.translate_button.grid(row=0, column=0, padx=(0, 10), sticky="ew")
-
-        # Reset Languages button
-        self.reset_languages_button = ctk.CTkButton(action_buttons_frame,
-                                                    text="Reset Languages",
-                                                    command=self._reset_languages,
-                                                    font=("Arial", 16, "bold"),
-                                                    fg_color="#8B0000",
-                                                    hover_color="#DC143C",
-                                                    height=40)
-        self.reset_languages_button.grid(row=0, column=1, padx=(10, 0), sticky="ew")
-        current_row += 1
-
         ctk.CTkLabel(tab, text="Note: Actual translation functionality will be implemented in future updates.",
                      font=("Arial", 14, "italic"), text_color="#A9A9A9", wraplength=800, justify="center").grid(row=current_row, column=0, pady=(20, 30), padx=50)
         current_row += 1
@@ -1104,12 +1072,6 @@ class DataAnalyzerApp:
         current_row += 1
 
         tab.grid_rowconfigure(current_row, weight=1) # Push content to top
-
-    def _reset_languages(self):
-        """Resets the input and output language selections to English."""
-        self.input_language_var.set("English")
-        self.output_language_var.set("English")
-        messagebox.showinfo("Languages Reset", "Input and Output languages have been reset to English.")
 
 
     def analyze_data(self):
