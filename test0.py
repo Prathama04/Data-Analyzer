@@ -262,7 +262,7 @@ class DataAnalyzerApp:
             ("1. Data Connection", self.icon_data_connection),
             ("2. Summarize Data", self.icon_summarize_data),
             ("3. Analyze Data", self.icon_analyze_data),
-            ("4. Multilingual Support", self.icon_multilingual) # Added new tab
+            ("4. Multilingual Support", self.icon_multilingual)
         ]
 
         for text, icon in tab_data:
@@ -280,8 +280,7 @@ class DataAnalyzerApp:
         self.build_data_connection_tab()
         self.build_summarize_data_tab()
         self.build_analyze_data_tab()
-        self.build_multilingual_support_tab() # Call to build the new tab
-        # Defer the state update to ensure all widgets are fully rendered
+        self.build_multilingual_support_tab()
         self.root.after(100, self.update_summary_tab_state)
 
     def on_tab_select(self, tab_name):
@@ -308,7 +307,6 @@ class DataAnalyzerApp:
         tab.grid_rowconfigure(5, weight=1) # For input_section (expandable)
         tab.grid_rowconfigure(6, weight=0) # For Connect & Load Data button
         tab.grid_rowconfigure(7, weight=0) # For loading label
-        # Removed data_preview_label related rows
         tab.grid_rowconfigure(8, weight=1) # For extra space at the bottom
 
         current_row = 0
@@ -359,11 +357,13 @@ class DataAnalyzerApp:
 
         self.input_section = ctk.CTkFrame(tab, fg_color="transparent")
         self.input_section.grid(row=5, column=0, pady=10, sticky="nsew", padx=50) # Placed in expandable row 5
-        self.input_section.grid_columnconfigure(0, weight=1)
+        self.input_section.grid_columnconfigure(0, weight=1) # Ensure column expands
+        self.input_section.grid_rowconfigure(0, weight=1) # Ensure row expands for placeholder
+
         self.input_section_placeholder_label = ctk.CTkLabel(self.input_section,
                                                             text="Click 'Submit Source Type' to see connection fields.",
                                                             font=("Arial", 16), text_color="#A9A9A9")
-        self.input_section_placeholder_label.pack(pady=50)
+        self.input_section_placeholder_label.grid(row=0, column=0, pady=50, sticky="nsew") # Use grid instead of pack
 
         # Initialize connect_load_button and loading_label_data_load here, but grid them later
         self.connect_load_button = ctk.CTkButton(tab,
@@ -378,13 +378,13 @@ class DataAnalyzerApp:
 
     def on_data_source_select(self, choice):
         """Handles the selection of a data source from the OptionMenu."""
-        self.clear_frame_widgets(self.input_section)
+        self.clear_frame_widgets(self.input_section) # Clear all children from input_section
         if choice == "--- Select Source ---":
             self.submit_source_button.configure(state="disabled")
             self.input_section_placeholder_label = ctk.CTkLabel(self.input_section,
                                                                 text="Click 'Submit Source Type' to see connection fields.",
                                                                 font=("Arial", 16), text_color="#A9A9A9")
-            self.input_section_placeholder_label.pack(pady=50)
+            self.input_section_placeholder_label.grid(row=0, column=0, pady=50, sticky="nsew") # Use grid
             self.connect_load_button.grid_forget()
             self.loading_label_data_load.grid_forget()
         else:
@@ -392,7 +392,7 @@ class DataAnalyzerApp:
             self.input_section_placeholder_label = ctk.CTkLabel(self.input_section,
                                                                 text=f"Selected {choice}. Click 'Submit Source Type' to configure.",
                                                                 font=("Arial", 16), text_color="#A9A9A9")
-            self.input_section_placeholder_label.pack(pady=50)
+            self.input_section_placeholder_label.grid(row=0, column=0, pady=50, sticky="nsew") # Use grid
             self.connect_load_button.grid_forget()
             self.loading_label_data_load.grid_forget()
         self.root.update_idletasks()
@@ -401,8 +401,16 @@ class DataAnalyzerApp:
     def show_source_input_fields(self):
         """Displays the appropriate input fields based on the selected data source."""
         choice = self.data_source.get()
-        self.clear_frame_widgets(self.input_section)
+        self.clear_frame_widgets(self.input_section) # Clear current widgets in input_section
         self.entries = {}
+
+        # Configure input_section grid for dynamic fields
+        self.input_section.grid_columnconfigure(0, weight=1)
+        self.input_section.grid_columnconfigure(1, weight=0) # For browse button if applicable
+        # Set specific rows to weight 0 for content, and last row to weight 1 for expansion
+        for i in range(6): # Max 6 rows for input fields + note
+            self.input_section.grid_rowconfigure(i, weight=0)
+        self.input_section.grid_rowconfigure(6, weight=1) # Make last row expandable within input_section
 
         if choice == "CSV/Excel File":
             self.build_file_input_fields()
@@ -414,11 +422,11 @@ class DataAnalyzerApp:
             self.input_section_placeholder_label = ctk.CTkLabel(self.input_section,
                                                                 text="Please select a data source to continue.",
                                                                 font=("Arial", 16), text_color="#A9A9A9")
-            self.input_section_placeholder_label.pack(pady=50)
+            self.input_section_placeholder_label.grid(row=0, column=0, pady=50, sticky="nsew")
             self.connect_load_button.configure(state="disabled")
             return
 
-        # Place Connect & Load Data button and loading label at fixed rows at the bottom
+        # Place Connect & Load Data button and loading label at fixed rows at the bottom of the tab
         tab = self.tabview.tab("1. Data Connection")
         self.connect_load_button.grid(row=6, column=0, pady=(20, 10), sticky="ew", padx=50)
         self.connect_load_button.configure(state="normal")
@@ -428,8 +436,11 @@ class DataAnalyzerApp:
 
     def build_file_input_fields(self):
         """Builds input fields for CSV/Excel file selection."""
+        # Ensure input_section's grid is configured for these fields
         self.input_section.grid_columnconfigure(0, weight=1)
         self.input_section.grid_columnconfigure(1, weight=0)
+        # No need to configure rows here, as build_source_input_fields already sets them up
+        # and we're just placing widgets into those rows.
 
         ctk.CTkLabel(self.input_section, text="File Path:", font=("Arial", 16), text_color="#D3D3D3").grid(row=0, column=0, sticky="w", pady=(10,5))
         self.file_path_entry = ctk.CTkEntry(self.input_section,
@@ -573,7 +584,6 @@ class DataAnalyzerApp:
             else:
                 raise ValueError("Please select a data source type from the dropdown.")
 
-            # Removed data preview label update
             self.tabview.set("2. Summarize Data")
             self.update_summary_tab_state()
 
@@ -581,7 +591,6 @@ class DataAnalyzerApp:
             self.df = None
             self.loading_label_data_load.configure(text=f"Error: {e}", text_color="red")
             messagebox.showerror("Loading Error", f"Failed to load data: {e}")
-            # Removed data preview label update for error
             self.update_summary_tab_state()
 
     def reset_application(self):
