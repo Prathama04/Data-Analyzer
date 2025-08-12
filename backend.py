@@ -8,14 +8,16 @@ import os
 import warnings
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
-from googletrans import Translator 
+from googletrans import Translator # For translation functionality
+
+# Import functions and classes from the separate summarizer module
 from summarizer1 import (
     read_excel_full_clean,
     read_excel_partial_clean,
     DataSummarizer
 )
 
-
+# For SharePoint - you'll need to install this: pip install Office365-REST-Python-Client
 try:
     from office365.runtime.auth.client_credential import ClientCredential
     from office365.sharepoint.client_context import ClientContext
@@ -221,7 +223,8 @@ class DataAnalyzer:
     def analyse_dataframe(self, df: pd.DataFrame, user_prompt: str, model="deepseek/deepseek-r1:free"):
         """
         Queries the DataFrame using an LLM to generate and execute Pandas code.
-        This method replaces the previous 'analyse_dataframe' logic and is now part of DataAnalyzer.
+        After execution, if the result is a DataFrame/Series, it's passed back to the LLM
+        for natural language summarization.
         """
         # Conditionally re-load/re-clean data using partial clean for LLM
         df_for_llm = df.copy() # Default to using the already loaded df
@@ -234,32 +237,32 @@ class DataAnalyzer:
                 print(f"Warning: Could not apply partial clean for LLM: {e}. Using fully cleaned df.")
                 # Fallback to the fully cleaned df if partial cleaning fails
 
-        # Build schema summary
-        summary = "### DataFrame Overview:\n"
-        summary += f"- Rows: {len(df_for_llm)}\n"
-        summary += f"- Columns: {len(df_for_llm.columns)}\n"
+        # Build schema summary for code generation
+        schema_summary = "### DataFrame Overview:\n"
+        schema_summary += f"- Rows: {len(df_for_llm)}\n"
+        schema_summary += f"- Columns: {len(df_for_llm.columns)}\n"
 
-        summary += "\n### Column Types:\n"
+        schema_summary += "\n### Column Types:\n"
         for col in df_for_llm.columns:
-            summary += f"- {col}: {df_for_llm[col].dtype}\n"
+            schema_summary += f"- {col}: {df_for_llm[col].dtype}\n"
 
         sample_rows = df_for_llm.head(3).to_dict(orient="records")
         safe_sample_rows = [
             {k: self._make_json_safe(v) for k, v in row.items()}
             for row in sample_rows
         ]
-        summary += "\n### Sample Rows:\n" + json.dumps(safe_sample_rows, indent=2)
+        schema_summary += "\n### Sample Rows:\n" + json.dumps(safe_sample_rows, indent=2)
 
-        # Improved system prompt
-        system_prompt = (
+        # System prompt for code generation
+        code_gen_system_prompt = (
             "You are a data analyst assistant. Based on the DataFrame schema and sample rows, "
             "generate valid Pandas code that answers the user's question. "
             "Always assign the final result to a variable named `result`. "
             "Only output valid Python code. Do not return explanations or markdown formatting like ```."
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt + "\n\n" + summary},
+        messages_code_gen = [
+            {"role": "system", "content": code_gen_system_prompt + "\n\n" + schema_summary},
             {"role": "user", "content": user_prompt}
         ]
 
@@ -270,15 +273,16 @@ class DataAnalyzer:
             "Content-Type": "application/json"
         }
 
-        body = {
+        body_code_gen = {
             "model": model,
-            "messages": messages
+            "messages": messages_code_gen
         }
 
         try:
-            response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(body))
-            response.raise_for_status()
-            code = response.json()["choices"][0]["message"]["content"].strip()
+            # First LLM call: Generate Pandas code
+            response_code_gen = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(body_code_gen))
+            response_code_gen.raise_for_status()
+            code = response_code_gen.json()["choices"][0]["message"]["content"].strip()
 
             print("\nGenerated Code:\n", code, "\n")
 
@@ -300,36 +304,62 @@ class DataAnalyzer:
                 "pd": pd,
                 "np": np
             }
-            result = None
+            exec_result = None
 
+            # Execute the generated Pandas code
             exec(code, {"pd": pd, "np": np}, local_vars)
-            result = local_vars.get("result", None)
+            exec_result = local_vars.get("result", None)
 
-            if result is None:
+            if exec_result is None:
+                # Fallback: find a suitable non-df result if 'result' variable wasn't explicitly set
                 candidates = {
                     k: v for k, v in local_vars.items()
                     if k != "df" and isinstance(v, (pd.Series, pd.DataFrame, str, int, float, list, pd.Timestamp))
                 }
                 if candidates:
-                    result = list(candidates.values())[-1]
+                    exec_result = list(candidates.values())[-1]
 
-            if isinstance(result, pd.DataFrame):
-                return result.to_string(index=False)
-            elif isinstance(result, pd.Series):
-                return result.to_string(index=False)
-            elif isinstance(result, pd.Timestamp):
-                return result.strftime("%Y-%m-%d %H:%M:%S")
-            elif isinstance(result, (float, int, str)):
-                return str(result)
-            elif result is not None:
-                return str(result)
+            # Format the execution result for the second LLM call (natural language generation)
+            if isinstance(exec_result, pd.DataFrame):
+                result_str = exec_result.to_string(index=False)
+            elif isinstance(exec_result, pd.Series):
+                result_str = exec_result.to_string(index=False)
+            elif isinstance(exec_result, pd.Timestamp):
+                result_str = exec_result.strftime("%Y-%m-%d %H:%M:%S")
+            elif isinstance(exec_result, (float, int, str)):
+                result_str = str(exec_result)
+            elif exec_result is not None:
+                result_str = str(exec_result)
             else:
                 return "✅ Code executed, but no explicit result to return. Check generated code for implicit actions."
+
+            # Second LLM call: Generate natural language explanation
+            nl_gen_system_prompt = (
+                "You are a helpful data analyst. Explain the following data result in a concise, "
+                "easy-to-understand paragraph. Focus on the key findings and avoid technical jargon "
+                "unless necessary. If the result is a list of items, summarize it appropriately. "
+                "Do not include any code or markdown formatting like ```."
+            )
+            messages_nl_gen = [
+                {"role": "system", "content": nl_gen_system_prompt},
+                {"role": "user", "content": f"The data analysis result is:\n{result_str}\n\nPlease explain this."}
+            ]
+
+            body_nl_gen = {
+                "model": model, # Use the same model
+                "messages": messages_nl_gen
+            }
+
+            response_nl_gen = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(body_nl_gen))
+            response_nl_gen.raise_for_status()
+            final_analysis_result = response_nl_gen.json()["choices"][0]["message"]["content"].strip()
+
+            return final_analysis_result
 
         except requests.exceptions.RequestException as req_e:
             return f"❌ API Request Error: {req_e}"
         except json.JSONDecodeError as json_e:
-            return f"❌ JSON Decoding Error from API: {json_e}. Response was: {response.text if 'response' in locals() else 'No response'}\n{traceback.format_exc()}"
+            return f"❌ JSON Decoding Error from API: {json_e}. Response was: {response_code_gen.text if 'response_code_gen' in locals() else 'No response'}\n{traceback.format_exc()}"
         except Exception as e:
-            return f"❌ Error during code execution:\n{str(e)}\n\n{traceback.format_exc()}"
+            return f"❌ Error during code execution or natural language generation:\n{str(e)}\n\n{traceback.format_exc()}"
 
