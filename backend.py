@@ -4,12 +4,18 @@ import re
 import requests
 import json
 import traceback
-import os # Import os to access environment variables
-import warnings # For SharePoint client warning
+import os
+import warnings
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
+from googletrans import Translator 
+from summarizer1 import (
+    read_excel_full_clean,
+    read_excel_partial_clean,
+    DataSummarizer
+)
 
-# For SharePoint - you'll need to install this: pip install Office365-REST-Python-Client
+
 try:
     from office365.runtime.auth.client_credential import ClientCredential
     from office365.sharepoint.client_context import ClientContext
@@ -18,74 +24,45 @@ except ImportError:
     warnings.warn("Office365-REST-Python-Client not found. SharePoint functionality will be simulated.")
     sharepoint_client_available = False
 
-# Import the Summarizer class from summarizer.py
-from summarizer import Summarizer
-
-# --- Utility Function for Excel Reading ---
-def read_excel_clean(path: str, sheet_name: str = 0) -> pd.DataFrame:
+# --- Translation Utility ---
+def translate_text(text: str, src_lang: str, dest_lang: str) -> str:
     """
-    Reads an Excel file, cleans it by dropping empty rows/columns,
-    cleaning column names, inferring dtypes, and filling missing values.
+    Translates text from src_lang to dest_lang using Google Translate.
     """
-    df = pd.read_excel(path, sheet_name=sheet_name)
+    try:
+        translator = Translator()
+        result = translator.translate(text, src=src_lang, dest=dest_lang)
+        return result.text
+    except Exception as e:
+        return f"[Error] Translation failed: {e}"
 
-    # Step 2: Drop completely empty rows/columns
-    df.dropna(how='all', inplace=True)
-    df.dropna(axis=1, how='all', inplace=True)
-    
-   
-    skip_cols = set() 
-   
-    df = df[[col for col in df.columns if col not in skip_cols]]
+LANGUAGES = {
+    'af': 'afrikaans', 'sq': 'albanian', 'am': 'amharic', 'ar': 'arabic', 'hy': 'armenian',
+    'az': 'azerbaijani', 'eu': 'basque', 'be': 'belarusian', 'bn': 'bengali', 'bs': 'bosnian',
+    'bg': 'bulgarian', 'ca': 'catalan', 'ceb': 'cebuano', 'ny': 'chichewa',
+    'zh-cn': 'chinese (simplified)', 'zh-tw': 'chinese (traditional)', 'co': 'corsican',
+    'hr': 'croatian', 'cs': 'czech', 'da': 'danish', 'nl': 'dutch', 'en': 'english',
+    'eo': 'esperanto', 'et': 'estonian', 'tl': 'filipino', 'fi': 'finnish', 'fr': 'french',
+    'fy': 'frisian', 'gl': 'galician', 'ka': 'georgian', 'de': 'german', 'el': 'greek',
+    'gu': 'gujarati', 'ht': 'haitian creole', 'ha': 'hausa', 'haw': 'hawaiian', 'iw': 'hebrew',
+    'he': 'hebrew', 'hi': 'hindi', 'hmn': 'hmong', 'hu': 'hungarian', 'is': 'icelandic',
+    'ig': 'igbo', 'id': 'indonesian', 'ga': 'irish', 'it': 'italian', 'ja': 'japanese',
+    'jw': 'javanese', 'kn': 'kannada', 'kk': 'kazakh', 'km': 'khmer', 'ko': 'korean',
+    'ku': 'kurdish (kurmanji)', 'ky': 'kyrgyz', 'lo': 'lao', 'la': 'latin', 'lv': 'latvian',
+    'lt': 'lithuanian', 'lb': 'luxembourgish', 'mk': 'macedonian', 'mg': 'malagasy',
+    'ms': 'malay', 'ml': 'malayalam', 'mt': 'maltese', 'mi': 'maori', 'mr': 'marathi',
+    'mn': 'mongolian', 'my': 'myanmar (burmese)', 'ne': 'nepali', 'no': 'norwegian',
+    'or': 'odia', 'ps': 'pashto', 'fa': 'persian', 'pl': 'polish', 'pt': 'portuguese',
+    'pa': 'punjabi', 'ro': 'romanian', 'ru': 'russian', 'sm': 'samoan', 'gd': 'scots gaelic',
+    'sr': 'serbian', 'st': 'sesotho', 'sn': 'shona', 'sd': 'sindhi', 'si': 'sinhala',
+    'sk': 'slovak', 'sl': 'slovenian', 'so': 'somali', 'es': 'spanish', 'su': 'sundanese',
+    'sw': 'swahili', 'sv': 'swedish', 'tg': 'tajik', 'ta': 'tamil', 'te': 'telugu',
+    'th': 'thai', 'tr': 'turkish', 'uk': 'ukrainian', 'ur': 'urdu', 'ug': 'uyghur',
+    'uz': 'uzbek', 'vi': 'vietnamese', 'cy': 'welsh', 'xh': 'xhosa', 'yi': 'yiddish',
+    'yo': 'yoruba', 'zu': 'zulu'
+}
 
-    # Step 3: Clean column names
-    df.columns = [
-        str(col).strip().lower().replace(' ', '_').replace('\n', '_')
-        for col in df.columns
-    ]
-
-    # Step 4: Try to infer datetime columns (skip time-only formats)
-    time_only_pattern = re.compile(r'^\s*\d{1,2}:\d{2}:\d{2}\s*$')
-
-    for col in df.columns:
-        if df[col].dtype == object:
-            sample = df[col].dropna().astype(str).head(10)
-            if not sample.empty and sample.apply(lambda x: bool(time_only_pattern.match(x))).all():
-                continue  # Skip columns that look like time-only
-            try:
-                parsed = pd.to_datetime(df[col], errors='coerce', utc=False)
-                if parsed.notna().sum() > 0.6 * len(parsed):
-                    df[col] = parsed
-            except Exception:
-                continue
-
-    # Step 5: Convert object-like numerics to float
-    for col in df.select_dtypes(include='object').columns:
-        try:
-            numeric_series = pd.to_numeric(df[col], errors='coerce')
-            if numeric_series.notna().sum() > 0.6 * len(numeric_series):
-                df[col] = numeric_series
-        except Exception:
-            continue
-
-    # Step 6: Fill missing values smartly
-    for col in df.columns:
-        if df[col].isna().sum() == 0:
-            continue
-
-        if pd.api.types.is_numeric_dtype(df[col]):
-            df[col] = df[col].interpolate(method='linear', limit_direction='both')
-            df[col] = df[col].fillna(df[col].median())
-        
-        elif pd.api.types.is_datetime64_any_dtype(df[col]):
-            df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
-
-        elif isinstance(df[col].dtype, pd.CategoricalDtype) or df[col].dtype == object:
-            mode_val = df[col].mode().iloc[0] if not df[col].mode().empty else "Unknown"
-            df[col] = df[col].fillna(mode_val)
-
-    return df
-
+# --- Data Loading Functions (stay in backend as they are connection-specific) ---
 
 def load_sql_table(dialect, username, password, host, port, database, sql_query):
     """
@@ -100,7 +77,6 @@ def load_sql_table(dialect, username, password, host, port, database, sql_query)
 
     print(f"Attempting to connect to SQL database: {dialect} on {host}:{port}/{database}")
     print(f"Executing query: {sql_query}")
-    
 
     try:
         engine = create_engine(database_url)
@@ -141,7 +117,7 @@ def load_sharepoint_list(site_url, list_name, client_id, client_secret):
     Requires Office365-REST-Python-Client and proper Azure AD App registration.
     """
     print(f"Attempting to connect to SharePoint list: '{list_name}' at '{site_url}'")
-    
+
     if not sharepoint_client_available:
         warnings.warn("Office365-REST-Python-Client not installed. Simulating SharePoint data load.")
         return _simulate_sharepoint_data(list_name)
@@ -169,8 +145,10 @@ def load_sharepoint_list(site_url, list_name, client_id, client_secret):
 # --- Main DataAnalyzer Class ---
 class DataAnalyzer:
     def __init__(self):
-        self.df = None 
-        self.summarizer = None 
+        self.df = None
+        self.data_summarizer = None
+        self.original_file_path = None # To store path for partial cleaning if needed
+
     def _make_json_safe(self, val):
         """Helper to make values safe for JSON serialization."""
         if isinstance(val, (pd.Timestamp, pd.Timedelta, np.datetime64)):
@@ -183,12 +161,22 @@ class DataAnalyzer:
     def load_data(self, data_source: str, **kwargs):
         """
         Generic method to load data based on the source.
-        Dispatches to the appropriate loading function and initializes the Summarizer.
+        Dispatches to the appropriate loading function and initializes the DataSummarizer.
         """
         try:
+            self.df = None # Reset df on new load
+            self.original_file_path = None # Reset path
+
             if data_source == "file":
-                
-                self.df = read_excel_clean(kwargs.get('file_path'))
+                file_path = kwargs.get('file_path')
+                if not file_path:
+                    raise ValueError("File path must be provided for file source type.")
+                self.original_file_path = file_path # Store original path
+
+                if file_path.lower().endswith(('.xls', '.xlsx', '.csv')): # Handle CSV for full clean too
+                    self.df = read_excel_full_clean(file_path) # Use full clean for initial load
+                else:
+                    raise ValueError("Unsupported file type. Only .csv, .xls, .xlsx are supported.")
             elif data_source == "sql":
                 self.df = load_sql_table(
                     kwargs.get('dialect'),
@@ -209,41 +197,53 @@ class DataAnalyzer:
             else:
                 raise ValueError(f"Unsupported data source: {data_source}")
 
-            # Once data is loaded and initially cleaned, initialize the Summarizer
+            # Once data is loaded and initially cleaned, initialize the DataSummarizer
             if self.df is not None and not self.df.empty:
-                self.summarizer = Summarizer(self.df) 
+                self.data_summarizer = DataSummarizer(self.df)
             else:
-                self.summarizer = None
-            
+                self.data_summarizer = None
+
             return self.df # Return the loaded DataFrame for preview in GUI
 
         except Exception as e:
             self.df = None
-            self.summarizer = None 
-            raise e 
+            self.data_summarizer = None
+            raise e
 
     def get_data_summary(self) -> tuple[str, list]:
         """
-        Delegates the summarization and plotting task to the Summarizer instance.
+        Delegates the summarization and plotting task to the DataSummarizer instance.
         """
-        if self.summarizer and self.df is not None and not self.df.empty:
-            return self.summarizer.get_summary()
+        if self.data_summarizer and self.df is not None and not self.df.empty:
+            return self.data_summarizer.get_summary()
         return "No data loaded or summarizer not initialized, or DataFrame is empty.", []
 
     def analyse_dataframe(self, df: pd.DataFrame, user_prompt: str, model="deepseek/deepseek-r1:free"):
-        """        Queries the DataFrame using an LLM to generate and execute Pandas code.
+        """
+        Queries the DataFrame using an LLM to generate and execute Pandas code.
         This method replaces the previous 'analyse_dataframe' logic and is now part of DataAnalyzer.
         """
+        # Conditionally re-load/re-clean data using partial clean for LLM
+        df_for_llm = df.copy() # Default to using the already loaded df
+        if self.original_file_path and (self.original_file_path.lower().endswith(('.xls', '.xlsx'))):
+            try:
+                # Apply partial clean specifically for the LLM query
+                df_for_llm = read_excel_partial_clean(self.original_file_path)
+                print("Applied partial clean for LLM query.")
+            except Exception as e:
+                print(f"Warning: Could not apply partial clean for LLM: {e}. Using fully cleaned df.")
+                # Fallback to the fully cleaned df if partial cleaning fails
+
         # Build schema summary
         summary = "### DataFrame Overview:\n"
-        summary += f"- Rows: {len(df)}\n"
-        summary += f"- Columns: {len(df.columns)}\n"
+        summary += f"- Rows: {len(df_for_llm)}\n"
+        summary += f"- Columns: {len(df_for_llm.columns)}\n"
 
         summary += "\n### Column Types:\n"
-        for col in df.columns:
-            summary += f"- {col}: {df[col].dtype}\n"
+        for col in df_for_llm.columns:
+            summary += f"- {col}: {df_for_llm[col].dtype}\n"
 
-        sample_rows = df.head(3).to_dict(orient="records")
+        sample_rows = df_for_llm.head(3).to_dict(orient="records")
         safe_sample_rows = [
             {k: self._make_json_safe(v) for k, v in row.items()}
             for row in sample_rows
@@ -263,11 +263,10 @@ class DataAnalyzer:
             {"role": "user", "content": user_prompt}
         ]
 
-       
-        DEEPSEEK_API_KEY = "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" 
+        DEEPSEEK_API_KEY = "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"
 
         headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}", 
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
 
@@ -278,10 +277,9 @@ class DataAnalyzer:
 
         try:
             response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, data=json.dumps(body))
-            response.raise_for_status() 
+            response.raise_for_status()
             code = response.json()["choices"][0]["message"]["content"].strip()
-            
-           
+
             print("\nGenerated Code:\n", code, "\n")
 
             # Remove any markdown code block formatting
@@ -298,25 +296,23 @@ class DataAnalyzer:
                 code = f"result = {code}"
 
             local_vars = {
-                "df": df.copy(), 
+                "df": df_for_llm.copy(), # Use the potentially partially cleaned df
                 "pd": pd,
                 "np": np
             }
             result = None
 
-            exec(code, {}, local_vars)
+            exec(code, {"pd": pd, "np": np}, local_vars)
             result = local_vars.get("result", None)
 
             if result is None:
-                # Fallback: find a suitable non-df result
                 candidates = {
                     k: v for k, v in local_vars.items()
                     if k != "df" and isinstance(v, (pd.Series, pd.DataFrame, str, int, float, list, pd.Timestamp))
                 }
                 if candidates:
-                    result = list(candidates.values())[-1] 
+                    result = list(candidates.values())[-1]
 
-            # Format output for display
             if isinstance(result, pd.DataFrame):
                 return result.to_string(index=False)
             elif isinstance(result, pd.Series):
@@ -333,6 +329,7 @@ class DataAnalyzer:
         except requests.exceptions.RequestException as req_e:
             return f"❌ API Request Error: {req_e}"
         except json.JSONDecodeError as json_e:
-            return f"❌ JSON Decoding Error from API: {json_e}. Response was: {response.text if 'response' in locals() else 'No response'}"
+            return f"❌ JSON Decoding Error from API: {json_e}. Response was: {response.text if 'response' in locals() else 'No response'}\n{traceback.format_exc()}"
         except Exception as e:
             return f"❌ Error during code execution:\n{str(e)}\n\n{traceback.format_exc()}"
+
