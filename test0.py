@@ -1,10 +1,8 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk, UnidentifiedImageError # Import UnidentifiedImageError
+from PIL import Image, ImageTk, UnidentifiedImageError 
 import pandas as pd
-import os # Import os for path manipulation
-
-# Import your updated backend file
+import os 
 import backend
 
 class DataAnalyzerApp:
@@ -18,7 +16,7 @@ class DataAnalyzerApp:
         ctk.set_default_color_theme("blue")
 
         # Initialize the DataAnalyzer from backend3
-        self.data_analyzer = backend.DataAnalyzer()
+        self.data_analyzer = backend4.DataAnalyzer()
         self.df = None
 
         # Attributes for plot display
@@ -50,6 +48,7 @@ class DataAnalyzerApp:
 
         self.copy_analysis_button = None
         self.copy_summary_button = None
+        self.copy_translation_button = None # New: Copy button for multilingual tab
 
         # Multilingual specific widgets
         self.input_text_box = None
@@ -93,7 +92,7 @@ class DataAnalyzerApp:
 
     def build_main_layout(self):
         # Reset internal state variables
-        self.data_analyzer = backend.DataAnalyzer()
+        self.data_analyzer = backend4.DataAnalyzer()
         self.df = None
         self.entries = {}
         self.file_path.set("No file selected")
@@ -815,6 +814,16 @@ class DataAnalyzerApp:
         else:
             messagebox.showwarning("No Analysis", "There is no analysis result to copy yet.")
 
+    def copy_translation_to_clipboard(self):
+        """Copies the content of the translation output textbox to the clipboard."""
+        translation_text = self.output_text_box.get("0.0", ctk.END).strip()
+        if translation_text and translation_text != "Translated text will appear here.":
+            self.root.clipboard_clear()
+            self.root.clipboard_append(translation_text)
+            messagebox.showinfo("Copied", "Translated text copied to clipboard!")
+        else:
+            messagebox.showwarning("No Text", "There is no translated text to copy yet.")
+
 
     def update_summary_tab_state(self):
         """Updates the state of buttons and elements in the 'Summarize Data' and 'Analyze Data' tabs based on whether data is loaded."""
@@ -873,6 +882,11 @@ class DataAnalyzerApp:
             self.translate_button.configure(state="normal")
         if self.reset_languages_button and self.reset_languages_button.winfo_exists():
             self.reset_languages_button.configure(state="normal")
+        
+        # New: Update state for multilingual tab copy button
+        if self.copy_translation_button and self.copy_translation_button.winfo_exists():
+            is_translation_placeholder = self.output_text_box.get("0.0", ctk.END).strip() == "Translated text will appear here."
+            self.copy_translation_button.configure(state="normal" if not is_translation_placeholder else "disabled")
 
 
     def build_analyze_data_tab(self):
@@ -989,7 +1003,7 @@ class DataAnalyzerApp:
         tab.grid_rowconfigure(0, weight=0) # Title
         tab.grid_rowconfigure(1, weight=0) # Description
         tab.grid_rowconfigure(2, weight=0) # Input language and text box frame
-        tab.grid_rowconfigure(3, weight=0) # Output language and text box frame
+        tab.grid_rowconfigure(3, weight=0) # Output language and text box frame + copy button
         tab.grid_rowconfigure(4, weight=0) # Translate button and loading label frame
         tab.grid_rowconfigure(5, weight=0) # Combined bottom buttons frame
         tab.grid_rowconfigure(6, weight=0) # Note about future feature
@@ -1052,6 +1066,7 @@ class DataAnalyzerApp:
         output_section_frame.grid(row=current_row, column=0, padx=50, pady=(10, 20), sticky="ew")
         output_section_frame.grid_columnconfigure(0, weight=0)
         output_section_frame.grid_columnconfigure(1, weight=1)
+        output_section_frame.grid_rowconfigure(2, weight=0) # New row for the copy button
 
         ctk.CTkLabel(output_section_frame, text="Output Language:",
                      font=("Arial", 16, "bold"), text_color="white").grid(row=0, column=0, pady=(0, 5), padx=0, sticky="w")
@@ -1087,7 +1102,20 @@ class DataAnalyzerApp:
         self.output_text_box.grid(row=0, column=1, rowspan=2, padx=(0, 0), pady=(0, 10), sticky="nsew")
         self.output_text_box.bind("<FocusIn>", self._clear_placeholder_output)
         self.output_text_box.bind("<FocusOut>", self._restore_placeholder_output)
-        current_row += 1
+        
+        # New: Copy button for output text, placed within output_section_frame
+        self.copy_translation_button = ctk.CTkButton(output_section_frame,
+                                                     text="Copy Translated Text",
+                                                     command=self.copy_translation_to_clipboard,
+                                                     font=("Arial", 16, "bold"),
+                                                     fg_color="#5D40A4",
+                                                     hover_color="#7B68EE",
+                                                     height=40,
+                                                     image=self.icon_copy,
+                                                     compound="left",
+                                                     state="disabled")
+        self.copy_translation_button.grid(row=2, column=1, padx=(0, 0), pady=(5, 0), sticky="e") # Placed in new row 2, column 1
+        current_row += 1 # Increment row for the output_section_frame
 
         # Translate Button and Loading Label
         translate_button_frame = ctk.CTkFrame(tab, fg_color="transparent")
@@ -1145,13 +1173,13 @@ class DataAnalyzerApp:
                                               image=self.icon_summarize_data,
                                               compound="left")
         summarize_data_button.grid(row=0, column=2, padx=(10, 0), sticky="ew")
-        current_row += 1 # Increment row for the combined button frame
+        current_row += 1
 
         ctk.CTkLabel(tab, text="Note: Actual translation functionality will be implemented in future updates.",
                      font=("Arial", 14, "italic"), text_color="#A9A9A9", wraplength=800, justify="center").grid(row=current_row, column=0, pady=(20, 30), padx=50)
         current_row += 1
 
-        tab.grid_rowconfigure(current_row, weight=1) # Push content to top
+        tab.grid_rowconfigure(current_row, weight=1)
 
     def _clear_placeholder_input(self, event):
         """Clears the placeholder text from the input textbox when focused."""
@@ -1197,6 +1225,7 @@ class DataAnalyzerApp:
         self.output_text_box.configure(state="normal")
         self.output_text_box.delete("0.0", ctk.END)
         self.translate_button.configure(state="disabled")
+        self.copy_translation_button.configure(state="disabled") # Disable copy button during translation
         self.root.update_idletasks()
 
         self.root.after(2000, self._complete_translation_placeholder)
@@ -1212,6 +1241,7 @@ class DataAnalyzerApp:
         self.output_text_box.configure(state="disabled")
         self.translation_loading_label.configure(text="Translation complete!", text_color="#ADFF2F")
         self.translate_button.configure(state="normal")
+        self.copy_translation_button.configure(state="normal") # Enable copy button after success
 
 
     def _reset_languages_and_text(self):
@@ -1233,6 +1263,7 @@ class DataAnalyzerApp:
         self.output_text_box.configure(state="disabled")
 
         self.translation_loading_label.configure(text="")
+        self.copy_translation_button.configure(state="disabled") # Disable copy button on reset
         messagebox.showinfo("Reset", "Languages and text fields have been reset.")
 
 
