@@ -4,8 +4,10 @@ from PIL import Image, ImageTk, UnidentifiedImageError
 import pandas as pd
 import os
 
+# Import your updated backend file and translation utilities
 import backend
-from backend import LANGUAGES, translate_text 
+from backend import LANGUAGES, translate_text # Import LANGUAGES and translate_text
+
 class DataAnalyzerApp:
     def __init__(self, root):
         self.root = root
